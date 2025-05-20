@@ -39,18 +39,18 @@ class AccountDetail(BaseModel):
 
 class EnquiryDetail(BaseModel):
     date: str  # Date in YYYY-MM-DD format
-    enquirer_name: str  # Who made the enquiry
-    enquiry_purpose: str  # e.g., "Credit Card", "Home Loan", etc.
+    enquirer_name: str
+    enquiry_purpose: str
 
     class Config:
         extra = 'forbid'
 
 class UserDetails(BaseModel):
     user_name: str
-    date_of_birth: str  # Date in YYYY-MM-DD format
-    pan: str  # Masked PAN number
-    report_generated_date: str  # Date in YYYY-MM-DD format
-    cibil_score: Optional[int]  # CIBIL score
+    date_of_birth: str
+    pan: str
+    report_generated_date: str
+    cibil_score: Optional[int]
     score_status: str  # "Available", "Not Available", "NA"
 
     class Config:
