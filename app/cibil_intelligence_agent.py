@@ -1,26 +1,22 @@
-import argparse
 import json
 import os
 import logging
-import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-from uuid import uuid4
+from typing import Optional, Union, Tuple, List
 
 import psycopg2
-from psycopg2.extras import Json
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
-from data_loaders import load_data
-from prompts import DEFAULT_CIBIL_PROMPT
-from cibil_base_model import Cibil_Report_Format
+
+from app.cibil_base_model import Cibil_Report_Format
+from app.data_loaders import load_data
+from app.prompts import DEFAULT_CIBIL_PROMPT
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
+from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
 
 # ------------------------------------------------------------------------------------------- #
 # Configuration
@@ -28,7 +24,6 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
 
 
 @dataclass(frozen=True)
@@ -67,6 +62,7 @@ class Settings:
             pwd = os.getenv("ENV_POSTGRES_PASSWORD", "")
             dbname = os.getenv("ENV_POSTGRES_DB", "postgres")
             dsn = f"host={host} port={port} dbname={dbname} user={user} password={pwd}"
+            logging.info(dsn)
         else:
             dsn = None
 
@@ -85,51 +81,39 @@ class Settings:
 # ------------------------------------------------------------------------------------------- #
 
 class DataPersister:
-    """Optional persistence layer – S3 for PDFs, PostgreSQL for JSON reports."""
+    """Optional persistence layer - PostgreSQL for JSON reports."""
 
     def __init__(self, *, settings: Settings):
-        self._s3_bucket = settings.s3_bucket
         self._pg_dsn = settings.pg_dsn
         self._pg_table = settings.pg_table
 
-        self._s3 = boto3.client("s3") if self._s3_bucket else None
         self._pg_conn = psycopg2.connect(self._pg_dsn) if self._pg_dsn else None
         if self._pg_conn:
             self._pg_conn.autocommit = True
 
-        # ---------------------- S3 ---------------------- #
-    def upload_pdf(self, path: Path) -> None:
-        if not self._s3_bucket or not self._s3:
-            logging.debug("S3 bucket not configured – skipping PDF upload")
-            logging.info("Skipping PDF upload------------->")
-            return
-
-        key = f"raw-pdfs/{path.stem}-{datetime.now(timezone.utc).isoformat()}.pdf"
-        logging.info("Uploading %s → s3://%s/%s", path, self._s3_bucket, key)
-        try:
-            self._s3.upload_file(str(path), self._s3_bucket, key)
-        except (BotoCoreError, ClientError):
-            logging.exception("Failed to upload %s to S3", path)
-            raise
-
     # ------------------- PostgreSQL ------------------- #
-    def save_json_report(self, report_json: str) -> None:
+    def save_json_report(self, data_values: List[str]) -> None:
         if not self._pg_conn:
             logging.debug("PostgreSQL DSN not configured – skipping JSON persistence")
-            logging.info("Skipping JSON persistence------------->")
             return
 
-        insert_sql = (
-            f"INSERT INTO {self._pg_table} (report_id, created_at, report) "
-            "VALUES (%s, %s, %s)"
-        )
-        report_id = "DDIPR5958G9663" #str(uuid4())
-        created_at = datetime.now(timezone.utc)
-        data = Json(json.loads(report_json))
-        logging.info("Persisting report %s to table %s", report_id, self._pg_table)
-        with self._pg_conn.cursor() as cur:
-            cur.execute(insert_sql, (report_id, created_at, data))
+        logging.info("Persisting report to table %s", self._pg_table)
+        pan = data_values[0]  # assuming PAN is always the first value
+        insert_query = cibil_report_insert_query
+        update_query = UPDATE_CIBIL_REPORT
 
+        with self._pg_conn.cursor() as cur:
+            # 1. Check if PAN already exists
+            cur.execute(f"SELECT 1 FROM cibil_intelligence WHERE pan = %s", (pan,))
+            exists = cur.fetchone()
+
+            if exists:
+                update_values =  data_values[1:] + [pan]  # all except PAN, then PAN at end
+                cur.execute(update_query, update_values)
+                logging.info("Updated existing record for PAN: %s", pan)
+            else:
+                cur.execute(insert_query, data_values)
+                logging.info("Inserted new record for PAN: %s", pan)
 # ------------------------------------------------------------------------------------------- #
 # Core generator
 # ------------------------------------------------------------------------------------------- #
@@ -186,77 +170,102 @@ class CibilReportGenerator:
 # Data input helpers
 # ------------------------------------------------------------------------------------------- #
 
-def load_input(source: str | Path, *, password: Optional[str] = None) -> tuple[str, Optional[Path]]:
+def load_input(
+    source: Union[str, Path],
+    *,
+    password: Optional[str] = None,
+    boto3_session: boto3.Session | None = None,
+) -> Tuple[str, Optional[Path]]:
+    """
+    Accepts:
+      • Local .pdf /.json path
+      • s3://bucket/key URI
+      • Raw JSON payload string
+
+    Returns
+    -------
+    (raw_content, pdf_path_or_None)
+        raw_content : str
+            Extracted text (PDF) or JSON string.
+        pdf_path_or_None : pathlib.Path | None
+            Local Path for a disk‑based PDF; None for S3 or JSON strings.
+    """
+    # -- Local file -------------------------------------------------------- #
     maybe_path = Path(source)
     if maybe_path.exists():
-        logging.debug("Loading file %s via data_loaders.load_data()", maybe_path)
-        raw = load_data(file_path=str(maybe_path), password=password)
+        logging.debug("Loading local file %s via load_data()", maybe_path)
+        raw = load_data(str(maybe_path), password=password)
         return raw, maybe_path if maybe_path.suffix.lower() == ".pdf" else None
 
-    logging.debug("Interpreting input as raw JSON payload")
+    # -- S3 URI ----------------------------------------------------------- #
+    if isinstance(source, str) and source.startswith("s3://"):
+        logging.debug("Loading S3 object %s via load_data()", source)
+        raw = load_data(source, password=password, boto3_session=boto3_session)
+        return raw, None
+
+    # -- Raw JSON payload string ------------------------------------------- #
+    logging.debug("Interpreting input as raw JSON payload string")
     try:
-        json.loads(source)  # fast syntax check only
+        json.loads(source)
     except json.JSONDecodeError as exc:
         raise ValueError(
-            "Input must be a .pdf/.json file path or a valid JSON payload string"
+            "Input must be a .pdf/.json file path, an s3:// URI, or a valid JSON payload string."
         ) from exc
+
     return source, None
 
 # ------------------------------------------------------------------------------------------- #
 # CLI
 # ------------------------------------------------------------------------------------------- #
-
-def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Generate a CIBIL intelligence report.")
-    p.add_argument("input", help="Path to PDF/JSON file or raw JSON string")
-    p.add_argument(
-        "-p", "--prompt",
-        help=(
-            "Override prompt: either a file path or literal string supplied "
-            "by the front‑end. If absent, a sturdy expert prompt shipped with "
-            "the backend is used."
-        ),
-    )
-    p.add_argument("--pdf-password", help="Password for PDF (if encrypted)")
-    p.add_argument("-v", "--verbose", action="count", default=0, help="Increase log verbosity")
-    return p
-
-
-def main(argv: Optional[list[str]] = None) -> None:
-    args = build_arg_parser().parse_args(argv)
-
-    settings = Settings.load()
-    persister = DataPersister(settings=settings)
-
-    # Resolve prompt override if provided
-    prompt_override: Optional[str] = None
-    if args.prompt:
-        prompt_source = Path(args.prompt)
-        prompt_override = (
-            prompt_source.read_text(encoding="utf-8") if prompt_source.exists() else args.prompt
-        )
-        logging.debug("Prompt override provided (length=%d)", len(prompt_override))
-
-    raw_text, pdf_path = load_input(args.input, password=args.pdf_password)
-    if pdf_path:
-        persister.upload_pdf(pdf_path)
-
-    generator = CibilReportGenerator(openai_key=settings.openai_key)
-    logging.info("Generating CIBIL intelligence report…")
-
-    try:
-        report_json = generator.generate(raw_data=raw_text, prompt_override=prompt_override)
-        print(report_json)
-        # persister.save_json_report(report_json=report_json)
-        print(report_json)
-    except Exception:
-        logging.exception("Failed to generate report")
-        sys.exit(1)
-
-
-# ------------------------------------------------------------------------------------------- #
-if __name__ == "__main__":
-    main()
-
-
-
+#
+# def build_arg_parser() -> argparse.ArgumentParser:
+#     p = argparse.ArgumentParser(description="Generate a CIBIL intelligence report.")
+#     p.add_argument("input", help="Path, s3:// URI, or JSON string.")
+#     p.add_argument(
+#         "-p", "--prompt",
+#         help=(
+#             "Override prompt: either a file path or literal string supplied "
+#             "by the front‑end. If absent, a sturdy expert prompt shipped with "
+#             "the backend is used."
+#         ),
+#     )
+#     p.add_argument("--pdf-password", help="Password for PDF (if encrypted)")
+#     p.add_argument("-v", "--verbose", action="count", default=0, help="Increase log verbosity")
+#     return p
+#
+#
+# def main(argv: Optional[list[str]] = None) -> None:
+#     args = build_arg_parser().parse_args(argv)
+#
+#     settings = Settings.load()
+#     persister = DataPersister(settings=settings)
+#
+#     # Resolve prompt override if provided
+#     prompt_override: Optional[str] = None
+#     if args.prompt:
+#         prompt_source = Path(args.prompt)
+#         prompt_override = (
+#             prompt_source.read_text(encoding="utf-8") if prompt_source.exists() else args.prompt
+#         )
+#         logging.debug("Prompt override provided (length=%d)", len(prompt_override))
+#
+#     raw_text, pdf_path = load_input(args.input, password=args.pdf_password)
+#
+#     generator = CibilReportGenerator(openai_key=settings.openai_key)
+#     logging.info("Generating CIBIL intelligence report…")
+#
+#     try:
+#         report_json = generator.generate(raw_data=raw_text, prompt_override=prompt_override)
+#         print(report_json)
+#         persister.save_json_report(report_json=report_json)
+#     except Exception:
+#         logging.exception("Failed to generate report")
+#         sys.exit(1)
+#
+#
+# # ------------------------------------------------------------------------------------------- #
+# if __name__ == "__main__":
+#     main()
+#
+#
+#
