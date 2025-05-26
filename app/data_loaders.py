@@ -10,6 +10,9 @@ from typing import Optional, Union
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+# ------------------------------------------------------------------------------------------- #
+                                # 1. Load JSON and S3 object
+# ------------------------------------------------------------------------------------------- #
 def load_json(file_path: str) -> str:
     """Load and validate JSON data from a file."""
     if not file_path.lower().endswith('.json'):
@@ -49,10 +52,9 @@ def loads_json_bytes(blob: bytes) -> str:
     data = json.loads(blob.decode("utf-8"))
     return json.dumps(data, indent=2, ensure_ascii=False)
 
-# --------------------------------------------------------------------------- #
-# 2.  PDF TEXT EXTRACTION (works with bytes OR local file path)
-# --------------------------------------------------------------------------- #
-
+# ------------------------------------------------------------------------------------------- #
+                # 2. PDF TEXT EXTRACTION (works with bytes OR local file path)
+# ------------------------------------------------------------------------------------------- #
 def extract_text_from_pdf(source: Union[str, bytes, io.BytesIO], password: str = "") -> str:
     """
     Extract text from a PDF.
@@ -93,10 +95,9 @@ def extract_text_from_pdf(source: Union[str, bytes, io.BytesIO], password: str =
     except Exception as e:
         raise RuntimeError(f"Failed to extract text from PDF: {e}") from e
 
-
-# --------------------------------------------------------------------------- #
-# 3.  PUBLIC APIS
-# --------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------------------- #
+                                        # 3. PUBLIC APIS
+# ------------------------------------------------------------------------------------------- #
 
 def load_data(
     path_or_uri: str | Path,
@@ -105,7 +106,7 @@ def load_data(
     boto3_session: boto3.Session | None = None,
 ) -> str:
     """
-    Load JSON/PDF data from a local file **or** an s3:// URI.
+    Load JSON/PDF data from a local file or s3:// URI.
 
     Returns the raw JSON string (pretty‑printed) **or** extracted PDF text.
     """

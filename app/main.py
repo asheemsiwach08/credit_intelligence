@@ -27,7 +27,6 @@ async def generate_cibil_report(
     • file           → standard multipart upload
     • source_url     → s3://bucket/key, local path on server, or raw JSON payload
     """
-    logging.info("Done till here.......")
     try:
         if bool(file) == bool(source_url):  # XOR check
             raise HTTPException(
@@ -35,9 +34,9 @@ async def generate_cibil_report(
                 detail="Provide either an uploaded file or source_url, but not both."
             )
 
-        # ───────────────────────────────────────────────────────────────── #
-        # 1.  Resolve prompt override (file path or direct text)
-        # ───────────────────────────────────────────────────────────────── #
+        # ------------------------------------------------------------------------------------------- #
+                            # 1. Resolve prompt override (file path or direct text)
+        # ------------------------------------------------------------------------------------------- #
         prompt_override: Optional[str] = None
         if prompt:
             prompt_source = Path(prompt)
@@ -46,9 +45,9 @@ async def generate_cibil_report(
             )
             logging.debug("Prompt override provided (length=%d)", len(prompt_override))
 
-        # ───────────────────────────────────────────────────────────────── #
-        # 2.  Obtain raw_text & pdf_path using the new unified loaders
-        # ───────────────────────────────────────────────────────────────── #
+        # ------------------------------------------------------------------------------------------- #
+                        # 2.  Obtain raw_text & pdf_path using the new unified loaders
+        # ------------------------------------------------------------------------------------------- #
         if file:
             # Read the uploaded bytes into memory
             uploaded_bytes = await file.read()
@@ -56,7 +55,6 @@ async def generate_cibil_report(
             # Decide how to interpret the upload
             if file.filename.lower().endswith(".pdf"):
                 raw_text = extract_text_from_pdf(uploaded_bytes, password=pdf_password or "")
-                logging.info("We are in the pdf.")
                 pdf_path = None  # we never wrote it to disk
             elif file.filename.lower().endswith(".json"):
                 raw_text = uploaded_bytes.decode("utf-8")
@@ -67,21 +65,15 @@ async def generate_cibil_report(
             # Delegate everything (local path, S3 URI, or raw JSON string)
             raw_text, pdf_path = load_input(source_url, password=pdf_password)
 
-        logging.info("DONe with the pdf data.")
-
-        # ───────────────────────────────────────────────────────────────── #
-        # 3.  Business logic
-        # ───────────────────────────────────────────────────────────────── #
-        logging.info("Going for settings")
+        # ------------------------------------------------------------------------------------------- #
+                                                # 3.  Business logic
+        # ------------------------------------------------------------------------------------------- #
         settings = Settings.load()
-        logging.info("Going for database")
         persister = DataPersister(settings=settings)
 
         # Generate Report and Save to Database
-        logging.info("Going for API")
         generator = CibilReportGenerator(openai_key=settings.openai_key)
         report_json = generator.generate(raw_data=raw_text, prompt_override=prompt)
-        logging.info("API did its work")
 
         # Values for Database
         report_json = json.loads(report_json)
@@ -91,13 +83,13 @@ async def generate_cibil_report(
         credit_enquiries = report_json.get("credit_enquiries", {})
         remarks = report_json.get("remarks", {})
         summary_report = report_json.get("summary_report", {})
-        logging.info("Json is working")
-        print(user_details)
+        logging.debug("Key items found from the JSON data.")
 
         if not user_details.get("user_name") or not user_details.get("pan"):
+            logging.debug("Missing user_name or PAN details.")
             raise HTTPException(status_code=422, detail="Missing user_name or PAN")
 
-        # Step 1: Extract all 25 values
+        # Step 1: Extract all 20 values
         data_values = [
             # user_details
             safe_get(user_details, "pan"),
@@ -132,6 +124,8 @@ async def generate_cibil_report(
             str(summary_report)
         ]
 
+        # user_pan = safe_get(user_details, "pan")
+        # persister.upload_pdf(file_object=file.file, report_id=user_pan)
         persister.save_json_report(data_values=data_values)
 
         return JSONResponse(content=report_json)

@@ -1,44 +1,47 @@
-import json
 import os
+import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional, Union, Tuple, List
 
 import psycopg2
 
 import boto3
-from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
+from openai import OpenAI, OpenAIError
 
-from app.cibil_base_model import Cibil_Report_Format
 from app.data_loaders import load_data
 from app.prompts import DEFAULT_CIBIL_PROMPT
+from app.cibil_base_model import Cibil_Report_Format
+from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
-from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
-
 # ------------------------------------------------------------------------------------------- #
-# Configuration
+                                    # Configuration
 # ------------------------------------------------------------------------------------------- #
-
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-
 @dataclass(frozen=True)
 class Settings:
-    """Runtime secrets + toggles loaded from env vars.
+    """
+    Runtime secrets + toggles loaded from env vars.
 
-    * `openai_key`   – OpenAI API key (required)
-    * `s3_bucket`    – S3 bucket name for PDF uploads (optional)
-    * `pg_dsn`       – libpq‑style DSN for PostgreSQL (optional; built from
-                       PG_HOST etc.)
-    * `pg_table`     – table name for persisting reports
+    * `openai_key`      – OpenAI API key (required)
+    * `s3_bucket`       – S3 bucket name for PDF uploads (optional)
+    * `aws_access_key`  – AWS Access Key ID for S3 (optional)
+    * `aws_secret_key`  – AWS Secret Access Key for S3 (optional)
+    * `aws_region`      – AWS Region for S3 (optional)
+    * `pg_dsn`          – libpq-style DSN for PostgreSQL (optional)
+    * `pg_table`        – table name for persisting reports
     """
 
     openai_key: str
     s3_bucket: Optional[str]
+    aws_access_key: Optional[str]
+    aws_secret_key: Optional[str]
+    aws_region: Optional[str]
     pg_dsn: Optional[str]
     pg_table: str
 
@@ -46,15 +49,18 @@ class Settings:
     def load() -> "Settings":
         load_dotenv()
 
-        # --- required secret ------------------------------------------------
+        # --- required OpenAI key ---
         key = os.getenv("CIBIL_OPENAI_KEY")
         if not key:
-            raise RuntimeError(f"Missing required Openai Key")
+            raise RuntimeError("Missing required OpenAI key (CIBIL_OPENAI_KEY)")
 
-        # --- optional S3 bucket --------------------------------------------
+        # --- optional S3 config ---
         bucket = os.getenv("ENV_S3_BUCKET")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_region = os.getenv("AWS_REGION")
 
-        # --- optional Postgres DSN -----------------------------------------
+        # --- optional Postgres DSN ---
         host = os.getenv("ENV_POSTGRES_HOST")
         if host:
             port = os.getenv("ENV_POSTGRES_PORT", "5432")
@@ -62,26 +68,27 @@ class Settings:
             pwd = os.getenv("ENV_POSTGRES_PASSWORD", "")
             dbname = os.getenv("ENV_POSTGRES_DB", "postgres")
             dsn = f"host={host} port={port} dbname={dbname} user={user} password={pwd}"
-            logging.info(dsn)
+            logging.info(f"Postgres DSN: {dsn}")
         else:
             dsn = None
 
-        # --- table name -----------------------------------------------------
+        # --- default table name ---
         table = os.getenv("ENV_POSTGRES_TABLE", "cibil_intelligence")
 
         return Settings(
             openai_key=key,
             s3_bucket=bucket,
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
+            aws_region=aws_region,
             pg_dsn=dsn,
             pg_table=table,
         )
 
 # ------------------------------------------------------------------------------------------- #
-# Persistent Layer
+                                    # Persistent Layer
 # ------------------------------------------------------------------------------------------- #
-
 class DataPersister:
-    """Optional persistence layer - PostgreSQL for JSON reports."""
 
     def __init__(self, *, settings: Settings):
         self._pg_dsn = settings.pg_dsn
@@ -90,6 +97,43 @@ class DataPersister:
         self._pg_conn = psycopg2.connect(self._pg_dsn) if self._pg_dsn else None
         if self._pg_conn:
             self._pg_conn.autocommit = True
+
+        # S3
+        self._s3_bucket = settings.s3_bucket
+        self._s3_client = (
+            boto3.client(
+                "s3",
+                aws_access_key_id=settings.aws_access_key,
+                aws_secret_access_key=settings.aws_secret_key,
+                region_name=settings.aws_region,
+            )
+            if settings.s3_bucket
+            else None
+            )
+
+    # ---------------- S3 Upload ---------------- #
+    def upload_pdf(self, file_object: object, report_id: str) -> None:
+        """Upload the PDF to S3 using the report ID as the object name."""
+        if not self._s3_client or not self._s3_bucket:
+            logging.debug("S3 not configured – skipping PDF upload")
+            return
+
+        # if not file_path.exists():
+        #     logging.warning("File %s does not exist – cannot upload", file_path)
+        #     return
+
+        object_key = f"/basichomeloan/users/credit-score/{report_id}.pdf"
+        # logging.info("Uploading %s to S3 bucket %s as %s", file_path, self._s3_bucket, object_key)
+
+        try:
+            self._s3_client.upload_fileobj(
+                Fileobj=file_object,
+                Bucket=self._s3_bucket,
+                Key=object_key,
+            )
+            logging.debug("File pushed to the S3 bucket.")
+        except Exception as e:
+            logging.error("Failed to upload file to S3: %s", e)
 
     # ------------------- PostgreSQL ------------------- #
     def save_json_report(self, data_values: List[str]) -> None:
@@ -114,10 +158,10 @@ class DataPersister:
             else:
                 cur.execute(insert_query, data_values)
                 logging.info("Inserted new record for PAN: %s", pan)
-# ------------------------------------------------------------------------------------------- #
-# Core generator
-# ------------------------------------------------------------------------------------------- #
 
+# ------------------------------------------------------------------------------------------- #
+                                    # Core generator
+# ------------------------------------------------------------------------------------------- #
 class CibilReportGenerator:
     """Wrapper around the OpenAI client encapsulating retries, timeouts and
     prompt fallbacks. You can extend this with async APIs or streaming if your
@@ -150,7 +194,8 @@ class CibilReportGenerator:
                 model=model,
                 messages=messages,
                 response_format=Cibil_Report_Format,
-                timeout=60,  # seconds
+                timeout=60,  # seconds,
+                temperature=0,
             )
         except OpenAIError:
             logging.exception("OpenAI API error")
@@ -167,9 +212,8 @@ class CibilReportGenerator:
         return self._call_llm(raw_data=raw_data, prompt=prompt)
 
 # ------------------------------------------------------------------------------------------- #
-# Data input helpers
+                                    # Data input helpers
 # ------------------------------------------------------------------------------------------- #
-
 def load_input(
     source: Union[str, Path],
     *,
@@ -215,7 +259,7 @@ def load_input(
     return source, None
 
 # ------------------------------------------------------------------------------------------- #
-# CLI
+                                        # CLI
 # ------------------------------------------------------------------------------------------- #
 #
 # def build_arg_parser() -> argparse.ArgumentParser:
@@ -266,6 +310,3 @@ def load_input(
 # # ------------------------------------------------------------------------------------------- #
 # if __name__ == "__main__":
 #     main()
-#
-#
-#
