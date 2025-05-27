@@ -57,7 +57,7 @@ async def generate_cibil_report(
     # --------------------------------------------------------------------
     # 4. Enrich report: recent payments + validation of mandatory fields
     # --------------------------------------------------------------------
-    report["recent_payments"] = calculate_recent_payments_by_lender(report.get("account_details", []), months_back=50)
+    report["recent_payments"] = calculate_recent_payments_by_lender(report.get("account_details", []), months_back=1)
     _validate_user_details(report.get("user_details", {}))
 
     # --------------------------------------------------------------------
