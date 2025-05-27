@@ -11,9 +11,9 @@ import boto3
 from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
-from app.data_loaders import load_data
-from app.prompts import prompt_v2
-from app.cibil_base_model import Cibil_Report_Format
+from app.utils.data_loaders import load_data
+from app.prompts.default_prompt import prompt_v2
+from app.models.cibil_base_model import Cibil_Report_Format
 from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 

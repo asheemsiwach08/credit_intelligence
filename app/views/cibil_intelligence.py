@@ -3,16 +3,9 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, List
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import UploadFile, HTTPException
 
-from app.cibil_intelligence_agent import (
-    CibilReportGenerator,
-    DataPersister,
-    load_input,
-    Settings,
-)
-from app.data_loaders import extract_text_from_pdf
+from app.utils.data_loaders import extract_text_from_pdf
 from app.utils.data_utils import (
     safe_get,
     try_parse_date,

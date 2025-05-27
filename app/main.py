@@ -4,13 +4,17 @@ import logging
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from app.cibil_intelligence_agent import CibilReportGenerator, DataPersister, load_input, Settings
+from fastapi.middleware.cors import CORSMiddleware
+from app.services.cibil_intelligence_agent import CibilReportGenerator, DataPersister, load_input, Settings
 from app.utils.data_utils import calculate_recent_payments_by_lender
 from app.views.cibil_intelligence import _read_upload, _resolve_prompt, _validate_user_details, _extract_data_values
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 app = FastAPI()
+origins = ["*"]
+app.add_middleware(CORSMiddleware, allow_origins=origins,
+                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # =============================================================================
 # Route handlers
