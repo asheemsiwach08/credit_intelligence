@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
 from app.data_loaders import load_data
-from app.prompts import DEFAULT_CIBIL_PROMPT
+from app.prompts import prompt_v2
 from app.cibil_base_model import Cibil_Report_Format
 from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
 from tenacity import retry, stop_after_attempt, wait_random_exponential
@@ -122,7 +122,7 @@ class DataPersister:
         #     logging.warning("File %s does not exist – cannot upload", file_path)
         #     return
 
-        object_key = f"/basichomeloan/users/credit-score/{report_id}.pdf"
+        object_key = f"/users/credit-score/{report_id}.pdf"
         # logging.info("Uploading %s to S3 bucket %s as %s", file_path, self._s3_bucket, object_key)
 
         try:
@@ -208,7 +208,7 @@ class CibilReportGenerator:
         the front‑end. Falls back to the default expert prompt shipped with the
         backend if none is given.
         """
-        prompt = prompt_override.strip() if prompt_override else DEFAULT_CIBIL_PROMPT
+        prompt = prompt_override.strip() if prompt_override else prompt_v2
         return self._call_llm(raw_data=raw_data, prompt=prompt)
 
 # ------------------------------------------------------------------------------------------- #
@@ -249,6 +249,7 @@ def load_input(
 
     # -- Raw JSON payload string ------------------------------------------- #
     logging.debug("Interpreting input as raw JSON payload string")
+    print(source,"------cibil intelligence")
     try:
         json.loads(source)
     except json.JSONDecodeError as exc:

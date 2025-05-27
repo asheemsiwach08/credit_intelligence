@@ -1,33 +1,33 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-# Define a strict schema for dpd_30_60_90_plus with additionalProperties set to false
-class PaymentHistorySummary(BaseModel):
-    dpd_30_60_90_plus: dict
-    recent_dpd_flag: bool  # Flag to indicate if recent DPD is a concern
+
+class DPD306090Plus(BaseModel):
+    days_30: int
+    days_60: int
+    days_90_plus: int
 
     class Config:
-        extra = 'forbid'  # Ensure no extra properties in the PaymentHistorySummary
+        extra = 'forbid'  # No additional properties allowed
 
-    # Explicitly define dpd_30_60_90_plus schema with additionalProperties set to false
-    # @property
-    def dpd_30_60_90_plus(self):
-        return {
-            "type": "object",
-            "properties": {
-                "30_days": { "type": "integer" },
-                "60_days": { "type": "integer" },
-                "90_plus_days": { "type": "integer" }
-            },
-            "additionalProperties": False  # Ensure no extra properties allowed here
-        }
+
+class PaymentHistorySummary(BaseModel):
+    dpd_30_60_90_plus: DPD306090Plus
+    recent_dpd_flag: bool
+
+    class Config:
+        extra = 'forbid'
 
 class AccountDetail(BaseModel):
+    lender_name: str
     account_type: str  # e.g., "Credit Card", "Personal Loan", etc.
     account_number: str  # masked string
     ownership: str  # "Individual", "Joint", etc.
     opened_date: str  # YYYY-MM-DD format
     last_payment_date: Optional[str]  # YYYY-MM-DD format, Optional
+    last_payment_amount: Optional[float]
+    upcoming_payment_date: Optional[str]  # YYYY-MM-DD format, Optional
+    upcoming_payment_amount: Optional[float]
     current_balance: float  # Balance remaining in the account
     sanctioned_amount: float  # Total sanctioned amount for the account
     repayment_tenure: Optional[int]  # in months
@@ -47,14 +47,20 @@ class EnquiryDetail(BaseModel):
 
 class UserDetails(BaseModel):
     user_name: str
+    gender: str
+    age: int
     date_of_birth: str
+    phone_number: str
+    email_address: str
     pan: str
-    report_generated_date: str
-    cibil_score: Optional[int]
-    score_status: str  # "Available", "Not Available", "NA"
 
     class Config:
         extra = 'forbid'
+
+class CreditScore(BaseModel):
+    cibil_score: int
+    score_status: str
+    report_generated_date: str
 
 class RiskAnalysis(BaseModel):
     risk_category: str  # "Low", "Moderate", "High"
@@ -91,6 +97,7 @@ class Remarks(BaseModel):
 
 class Cibil_Report_Format(BaseModel):
     user_details: UserDetails
+    credit_score: CreditScore
     risk_analysis: RiskAnalysis
     account_summary: AccountSummary
     credit_enquiries: CreditEnquiries
@@ -103,8 +110,8 @@ class Cibil_Report_Format(BaseModel):
 
     def generate_summary_report(self) -> str:
         """Return a human‑readable one‑pager summarising the bureau data."""
-        rs, ra, acc, ce, rem = (
-            self.report_summary,
+        cs, ra, acc, ce, rem = (
+            self.credit_score,
             self.risk_analysis,
             self.account_summary,
             self.credit_enquiries,
@@ -113,7 +120,7 @@ class Cibil_Report_Format(BaseModel):
 
         summary = (
             f"--- CIBIL Report Summary ---\n"
-            f"1. **CIBIL Score**: {rs.cibil_score} ({rs.score_status})\n"
+            f"1. **CIBIL Score**: {cs.cibil_score} ({cs.score_status})\n"
             f"   • Falls in the **{ra.risk_category}** bucket.\n"
             f"2. **Risk Analysis**\n"
             f"   • Interpretation : {ra.score_interpretation}\n"

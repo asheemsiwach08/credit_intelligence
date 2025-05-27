@@ -5,7 +5,7 @@ Take the raw data input provided, and perform the following:
 
 1. Extract key information such as:
    - Customer details (name, DOB, PAN)
-   - CIBIL score and status
+   - CIBIL score(credit score) and status - credit score found in gauge charts
    - Summary of accounts (active, closed, overdue, written-off)
    - Detailed credit enquiry history (last 6 months)
    - Per-account details (type, ownership, balance, DPD, payment history)
@@ -36,3 +36,78 @@ Begin processing the following raw data:
 
 {{RAW_CIBIL_REPORT_DATA_HERE}}
 """
+
+prompt_v2 = DEFAULT_CIBIL_PROMPT = """
+You are a senior credit-risk analyst.  
+Convert the **raw CIBIL report** below into a clean, intelligence-based credit report for lenders and underwriters.
+
+────────────────────────  REQUIRED STEPS  ────────────────────────
+1. **Extract** all key data points.  
+2. **Clean & normalise** dates (YYYY-MM-DD), numbers (no commas), and remove duplicates/inconsistencies.  
+3. **Analyse** risk and give a lending recommendation.  
+4. **Output exactly one valid JSON object** that conforms to the schema shown.  
+5. **Do NOT hallucinate**. If any field is missing or unreadable, set its value to `null`.  
+6. Return **only** the JSON – no extra text.
+
+────────────────────────────  SCHEMA  ────────────────────────────
+{
+  "report_generated_date": "YYYY-MM-DD" | null,
+
+  "customer": {
+    "pan":                string | null,
+    "name":               string | null,
+    "date_of_birth":      "YYYY-MM-DD" | null,
+    "gender":             "Male" | "Female" | null,
+    "age":                int | null,
+    "phone_number":       string | null,
+    "email_address":      string | null
+  },
+
+  "credit_score": {
+    "cibil_score":        int   | null,
+    "score_status":       string| null,
+    "score_interpretation": string | null
+  },
+
+  "risk_analysis": {
+    "risk_category":      "Low" | "Moderate" | "High" | null,
+    "suggested_action":   string | null
+  },
+
+  "account_summary": {
+    "total_accounts":     int | null,
+    "active_accounts":    int | null,
+    "closed_accounts":    int | null,
+    "overdue_accounts":   int | null,
+    "written_off_accounts": int | null
+  },
+
+  "account_details": [        // one object per account, or null
+    {
+      "type":            string | null,
+      "ownership":       string | null,
+      "current_balance": float  | null,
+      "dpd":             string | null,
+      "payment_history": string | null
+    }
+  ] | null,
+
+  "credit_enquiries": {
+    "total_enquiries_last_6_months": int | null,
+    "high_frequency_flag":           bool | null,
+    "enquiry_details":               [object] | null   // list each enquiry
+  },
+
+  "flags_and_observations": {
+    "critical_flags":      [string] | null,
+    "general_observations": string   | null
+  },
+
+  "remarks": string | null           // free-form expert comments
+}
+
+────────────────────  BEGIN RAW CIBIL DATA  ────────────────────
+{{RAW_CIBIL_REPORT_DATA_HERE}}
+───────────────────────────  END  ──────────────────────────────
+"""
+
