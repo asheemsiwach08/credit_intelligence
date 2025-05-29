@@ -118,12 +118,17 @@ class DataPersister:
             logging.debug("S3 not configured – skipping PDF upload")
             return
 
+        try:
+            file_object.seek(0, 0)  # rewind just in case
+        except Exception:
+            pass
+
         # if not file_path.exists():
         #     logging.warning("File %s does not exist – cannot upload", file_path)
         #     return
 
-        object_key = f"/users/credit-score/{report_id}.pdf"
-        # logging.info("Uploading %s to S3 bucket %s as %s", file_path, self._s3_bucket, object_key)
+        object_key = f"users/credit-score/{report_id}"
+        # logging.info("Uploading %s to S3 bucket %s as %s", self._s3_bucket, object_key)
 
         try:
             self._s3_client.upload_fileobj(
@@ -135,7 +140,22 @@ class DataPersister:
         except Exception as e:
             logging.error("Failed to upload file to S3: %s", e)
 
-    # ------------------- PostgreSQL ------------------- #
+    # ------------------- PostgreSQL Retrieval ------------------- #
+    def fetch_data_from_db(self, query: tuple[str, tuple[str]]) -> str:
+        if not self._pg_conn:
+            logging.debug("PostgreSQL DSN not configured - skipping JSON persistence")
+            return ""
+
+        logging.info("Fetching JSON data of user for CIBIL Score.")
+        with self._pg_conn.cursor() as cur:
+            cur.execute(*query)
+            user_data = cur.fetchone()
+
+        if not user_data:
+            raise ValueError("No stored data found for fallback_id")
+        return str(user_data)
+
+    # ------------------- PostgreSQL Update ------------------- #
     def save_json_report(self, data_values: List[str]) -> None:
         if not self._pg_conn:
             logging.debug("PostgreSQL DSN not configured – skipping JSON persistence")

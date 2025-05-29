@@ -1,6 +1,7 @@
+import uuid
 import logging
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union, List, Dict, Any
 
 # Set up logging
@@ -8,6 +9,11 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 def safe_get(d, key, default="{}"):
     return d.get(key, default)
+
+def generate_file_name(pan: str, unique_id:str, extension:str) -> str:
+    timestamp = datetime.now(timezone.utc).isoformat(timespec='milliseconds') \
+                .replace(":", "").replace(".", "") + "Z"
+    return f"{pan.upper()}_{timestamp}_{unique_id}.{extension}"
 
 def try_parse_date(date_str):
     if not date_str:
@@ -48,7 +54,7 @@ def calculate_recent_payments(json_data: Union[str, List[Dict[str, Any]]], month
         df = df[df['account_status'] == 'Active']
 
         # Convert last_payment_date to datetime, coerce errors
-        df['last_payment_date'] = pd.to_datetime(df['last_payment_date'], errors='coerce', dayfirst=True)
+        df['last_payment_date'] = pd.to_datetime(df['last_payment_date'], errors='coerce')
         df['last_payment_amount'] = pd.to_numeric(df['last_payment_amount'], errors='coerce').fillna(0)
 
         # Calculate cutoff date
@@ -150,8 +156,7 @@ def calculate_recent_payments_by_lender(
         # 3. Clean & filter rows
         df = df[df["account_status"] == "Active"]
         df["last_payment_date"] = pd.to_datetime(
-            df["last_payment_date"], errors="coerce", dayfirst=True
-        )
+            df["last_payment_date"], errors="coerce")
         df["last_payment_amount"] = (
             pd.to_numeric(df["last_payment_amount"], errors="coerce").fillna(0)
         )

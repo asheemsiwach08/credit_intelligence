@@ -36,23 +36,37 @@ def _resolve_prompt(prompt: Optional[str]) -> Optional[str]:
     logging.debug("Using inline prompt text (length=%d)", len(prompt))
     return prompt
 
-def _read_upload(file: UploadFile, pdf_password: Optional[str]) -> Tuple[str, Optional[str]]:
-    """Read an uploaded *PDF* or *JSON* file and return its text plus a pdf path.
 
-    The function returns a tuple ``raw_text, pdf_path``.  *pdf_path* is **None**
-    when the PDF is processed fully in‑memory.
+from typing import Optional, Tuple
+from fastapi import UploadFile, HTTPException
+import logging
+
+def _read_upload(
+    filename: str,
+    upload_bytes: bytes,
+    pdf_password: Optional[str] = None,
+) -> Tuple[str, Optional[str]]:
     """
-    uploaded_bytes = file.file.read()
-    filename = file.filename.lower()
+    Read an uploaded PDF or JSON file, return its raw text content and None for path (in-memory),
+    and upload the file to S3 regardless of type.
+    """
 
-    if filename.endswith(".pdf"):
-        raw_text = extract_text_from_pdf(uploaded_bytes, password=pdf_password or "")
-        return raw_text, None
 
-    if filename.endswith(".json"):
-        return uploaded_bytes.decode("utf-8"), None
+    try:
+        # Process the content
+        if filename.endswith(".pdf"):
+            raw_text = extract_text_from_pdf(upload_bytes, password=pdf_password or "")
+            return raw_text, None
 
-    raise HTTPException(400, detail="Only .pdf or .json uploads are accepted.")
+        elif filename.endswith(".json"):
+            return upload_bytes.decode("utf-8"), None
+
+        else:
+            raise HTTPException(400, detail="Only .pdf or .json uploads are accepted.")
+
+    except Exception as e:
+        logging.error("Error processing uploaded file: %s", e)
+        raise HTTPException(500, detail="Error processing uploaded file.")
 
 
 def _validate_user_details(user_details: Dict[str, Any]) -> None:

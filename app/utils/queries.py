@@ -64,3 +64,4 @@ UPDATE_CIBIL_REPORT = """UPDATE cibil_intelligence SET
     """
 
 CHECK_EXISTING_PAN = "SELECT 1 FROM cibil_intelligence WHERE pan = %s;"
+EXTRACT_PAN_DETAILS = "SELECT report_json FROM cibil_reports WHERE pan_number = %s;"
