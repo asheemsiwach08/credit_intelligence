@@ -20,7 +20,7 @@ pipeline{
             // }
             steps {
                 withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
-                    chmod +x .
+                    sh 'chmod +x .'
                     sh 'cp $ENV_FILE1 .env'
                 }
             }
