@@ -19,8 +19,8 @@ pipeline{
             //     branch 'main'
             // }
             steps {
-                withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE')]) {
-                    sh 'cp $ENV_FILE .env'
+                withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
+                    sh 'cp $ENV_FILE1 .env'
                 }
             }
         }
