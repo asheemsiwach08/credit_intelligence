@@ -24,5 +24,18 @@ pipeline{
                 }
             }
         }
+        stage('Setup Python Env & Install Dependencies') {
+            // when {
+            //     branch 'main'
+            // }
+            steps {
+                sh '''
+                python3 -m venv venv
+                source venv/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
+            }
+        }
     }
 }
