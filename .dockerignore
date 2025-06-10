@@ -4,9 +4,9 @@ __pycache__/
 *.so
 
 # Ignore virtual environment
-venv/
-.env
-*.env
+#venv/
+#.env
+#*.env
 
 # Ignore OS-specific files
 .DS_Store

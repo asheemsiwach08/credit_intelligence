@@ -98,7 +98,7 @@ def _extract_data_values(report: Dict[str, Any]) -> List[Any]:
         safe_get(user_details, "phone_number"),
         safe_get(user_details, "email_address"),
         try_parse_date(credit_score.get("report_generated_date")),
-        safe_get(credit_score, "cibil_score"),
+        safe_get(credit_score, "credit_score"),
         safe_get(credit_score, "score_status"),
 
         # risk_analysis

@@ -58,13 +58,13 @@ class UserDetails(BaseModel):
         extra = 'forbid'
 
 class CreditScore(BaseModel):
-    cibil_score: int
+    credit_score: int
     score_status: str
     report_generated_date: str
 
 class RiskAnalysis(BaseModel):
     risk_category: str  # "Low", "Moderate", "High"
-    score_interpretation: str  # Interpretation of the CIBIL score
+    score_interpretation: str  # Interpretation of the CREDIT score
     suggested_action: str  # Suggest action like "Approved", "Under Review", "Reject"
 
     class Config:
@@ -95,7 +95,7 @@ class Remarks(BaseModel):
     class Config:
         extra = 'forbid'
 
-class Cibil_Report_Format(BaseModel):
+class Credit_Report_Format(BaseModel):
     user_details: UserDetails
     credit_score: CreditScore
     risk_analysis: RiskAnalysis
@@ -119,8 +119,8 @@ class Cibil_Report_Format(BaseModel):
         )
 
         summary = (
-            f"--- CIBIL Report Summary ---\n"
-            f"1. **CIBIL Score**: {cs.cibil_score} ({cs.score_status})\n"
+            f"--- CREDIT Report Summary ---\n"
+            f"1. **CREDIT Score**: {cs.credit_score} ({cs.score_status})\n"
             f"   • Falls in the **{ra.risk_category}** bucket.\n"
             f"2. **Risk Analysis**\n"
             f"   • Interpretation : {ra.score_interpretation}\n"

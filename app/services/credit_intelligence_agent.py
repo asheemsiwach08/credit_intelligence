@@ -13,8 +13,8 @@ from openai import OpenAI, OpenAIError
 
 from app.utils.data_loaders import load_data
 from app.prompts.default_prompt import prompt_v2
-from app.models.cibil_base_model import Cibil_Report_Format
-from app.utils.queries import cibil_report_insert_query, UPDATE_CIBIL_REPORT
+from app.models.credit_base_model import Credit_Report_Format
+from app.utils.queries import credit_report_insert_query, UPDATE_CREDIT_REPORT
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 # ------------------------------------------------------------------------------------------- #
@@ -50,9 +50,9 @@ class Settings:
         load_dotenv()
 
         # --- required OpenAI key ---
-        key = os.getenv("CIBIL_OPENAI_KEY")
+        key = os.getenv("CREDIT_OPENAI_KEY")
         if not key:
-            raise RuntimeError("Missing required OpenAI key (CIBIL_OPENAI_KEY)")
+            raise RuntimeError("Missing required OpenAI key (CREDIT_OPENAI_KEY)")
 
         # --- optional S3 config ---
         bucket = os.getenv("ENV_S3_BUCKET")
@@ -73,7 +73,7 @@ class Settings:
             dsn = None
 
         # --- default table name ---
-        table = os.getenv("ENV_POSTGRES_TABLE", "cibil_intelligence")
+        table = os.getenv("ENV_POSTGRES_TABLE", "credit_intelligence")
 
         return Settings(
             openai_key=key,
@@ -146,7 +146,7 @@ class DataPersister:
             logging.debug("PostgreSQL DSN not configured - skipping JSON persistence")
             return ""
 
-        logging.info("Fetching JSON data of user for CIBIL Score.")
+        logging.info("Fetching JSON data of user for  Score.")
         with self._pg_conn.cursor() as cur:
             cur.execute(*query)
             user_data = cur.fetchone()
@@ -163,12 +163,12 @@ class DataPersister:
 
         logging.info("Persisting report to table %s", self._pg_table)
         pan = data_values[0]  # assuming PAN is always the first value
-        insert_query = cibil_report_insert_query
-        update_query = UPDATE_CIBIL_REPORT
+        insert_query = credit_report_insert_query
+        update_query = UPDATE_CREDIT_REPORT
 
         with self._pg_conn.cursor() as cur:
             # 1. Check if PAN already exists
-            cur.execute(f"SELECT 1 FROM cibil_intelligence WHERE pan = %s", (pan,))
+            cur.execute(f"SELECT 1 FROM credit_intelligence WHERE pan = %s", (pan,))
             exists = cur.fetchone()
 
             if exists:
@@ -182,7 +182,7 @@ class DataPersister:
 # ------------------------------------------------------------------------------------------- #
                                     # Core generator
 # ------------------------------------------------------------------------------------------- #
-class CibilReportGenerator:
+class CreditReportGenerator:
     """Wrapper around the OpenAI client encapsulating retries, timeouts and
     prompt fallbacks. You can extend this with async APIs or streaming if your
     use‑case requires lower latency or partial responses.
@@ -213,7 +213,7 @@ class CibilReportGenerator:
             response = self._client.beta.chat.completions.parse(
                 model=model,
                 messages=messages,
-                response_format=Cibil_Report_Format,
+                response_format=Credit_Report_Format,
                 timeout=60,  # seconds,
                 temperature=0,
             )
@@ -269,7 +269,7 @@ def load_input(
 
     # -- Raw JSON payload string ------------------------------------------- #
     logging.debug("Interpreting input as raw JSON payload string")
-    print(source,"------cibil intelligence")
+    print(source,"------ Credit intelligence")
     try:
         json.loads(source)
     except json.JSONDecodeError as exc:
@@ -284,7 +284,7 @@ def load_input(
 # ------------------------------------------------------------------------------------------- #
 #
 # def build_arg_parser() -> argparse.ArgumentParser:
-#     p = argparse.ArgumentParser(description="Generate a CIBIL intelligence report.")
+#     p = argparse.ArgumentParser(description="Generate a  intelligence report.")
 #     p.add_argument("input", help="Path, s3:// URI, or JSON string.")
 #     p.add_argument(
 #         "-p", "--prompt",
@@ -316,8 +316,8 @@ def load_input(
 #
 #     raw_text, pdf_path = load_input(args.input, password=args.pdf_password)
 #
-#     generator = CibilReportGenerator(openai_key=settings.openai_key)
-#     logging.info("Generating CIBIL intelligence report…")
+#     generator = ReportGenerator(openai_key=settings.openai_key)
+#     logging.info("Generating  intelligence report…")
 #
 #     try:
 #         report_json = generator.generate(raw_data=raw_text, prompt_override=prompt_override)

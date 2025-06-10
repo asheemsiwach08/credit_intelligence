@@ -1,11 +1,11 @@
 
-DEFAULT_CIBIL_PROMPT = """You are a financial data analyst and reporting agent. Your task is to convert raw CIBIL report data into a clean, structured, and intelligence-based credit report. The output should be optimized for review by lenders, underwriters, or financial institutions.
+DEFAULT_CREDIT_PROMPT = """You are a financial data analyst and reporting agent. Your task is to convert raw CREDIT report data into a clean, structured, and intelligence-based credit report. The output should be optimized for review by lenders, underwriters, or financial institutions.
 
 Take the raw data input provided, and perform the following:
 
 1. Extract key information such as:
    - Customer details (name, DOB, PAN)
-   - CIBIL score(credit score) and status - credit score found in gauge charts
+   - CREDIT score and status - credit score found in gauge charts
    - Summary of accounts (active, closed, overdue, written-off)
    - Detailed credit enquiry history (last 6 months)
    - Per-account details (type, ownership, balance, DPD, payment history)
@@ -13,7 +13,7 @@ Take the raw data input provided, and perform the following:
 
 2. Analyze the data to provide:
    - Risk assessment (Low, Moderate, High)
-   - Score interpretation (based on CIBIL score range)
+   - Score interpretation (based on CREDIT score range)
    - Lending recommendation or caution
 
 3. Present the output in a structured JSON format following this schema:
@@ -34,12 +34,12 @@ Output only the final structured report in JSON format.
 
 Begin processing the following raw data:
 
-{{RAW_CIBIL_REPORT_DATA_HERE}}
+{{RAW_CREDIT_REPORT_DATA_HERE}}
 """
 
-prompt_v2 = DEFAULT_CIBIL_PROMPT = """
+prompt_v2 = DEFAULT_CREDIT_PROMPT = """
 You are a senior credit-risk analyst.  
-Convert the **raw CIBIL report** below into a clean, intelligence-based credit report for lenders and underwriters.
+Convert the **raw CREDIT report** below into a clean, intelligence-based credit report for lenders and underwriters.
 
 ────────────────────────  REQUIRED STEPS  ────────────────────────
 1. **Extract** all key data points.  
@@ -64,7 +64,7 @@ Convert the **raw CIBIL report** below into a clean, intelligence-based credit r
   },
 
   "credit_score": {
-    "cibil_score":        int   | null,
+    "credit_score":        int   | null,
     "score_status":       string| null,
     "score_interpretation": string | null
   },
@@ -106,8 +106,8 @@ Convert the **raw CIBIL report** below into a clean, intelligence-based credit r
   "remarks": string | null           // free-form expert comments
 }
 
-────────────────────  BEGIN RAW CIBIL DATA  ────────────────────
-{{RAW_CIBIL_REPORT_DATA_HERE}}
+────────────────────  BEGIN RAW CREDIT DATA  ────────────────────
+{{RAW_CREDIT_REPORT_DATA_HERE}}
 ───────────────────────────  END  ──────────────────────────────
 """
 

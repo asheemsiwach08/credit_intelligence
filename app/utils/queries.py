@@ -1,5 +1,5 @@
-cibil_report_insert_query = """INSERT INTO cibil_intelligence (
-                pan, user_name, date_of_birth, gender, age, phone_number, email_address, report_generated_date, cibil_score,
+credit_report_insert_query = """INSERT INTO credit_intelligence (
+                pan, user_name, date_of_birth, gender, age, phone_number, email_address, report_generated_date, credit_score,
                 score_status, risk_category, score_interpretation, suggested_action, total_accounts, active_accounts,
                 closed_accounts, overdue_accounts, written_off_accounts, total_enquiries_last_6_months,
                 high_frequency_flag, enquiry_details, critical_flags, general_observations, summary_report
@@ -13,7 +13,7 @@ cibil_report_insert_query = """INSERT INTO cibil_intelligence (
                 %s,  -- phone_number
                 %s,  -- email_address
                 %s,  -- report_generated_date
-                %s,  -- cibil_score
+                %s,  -- credit_score
                 %s,  -- score_status
             
                 %s,  -- risk_category
@@ -36,7 +36,7 @@ cibil_report_insert_query = """INSERT INTO cibil_intelligence (
                 %s   -- summary_report (text)
                 );"""
 
-UPDATE_CIBIL_REPORT = """UPDATE cibil_intelligence SET
+UPDATE_CREDIT_REPORT = """UPDATE credit_intelligence SET
     user_name = %s,
     date_of_birth = %s,
     gender = %s,
@@ -44,7 +44,7 @@ UPDATE_CIBIL_REPORT = """UPDATE cibil_intelligence SET
     phone_number = %s,
     email_address = %s,
     report_generated_date = %s,
-    cibil_score = %s,
+    credit_score = %s,
     score_status = %s,
     risk_category = %s,
     score_interpretation = %s,
@@ -63,5 +63,5 @@ UPDATE_CIBIL_REPORT = """UPDATE cibil_intelligence SET
     WHERE pan = %s;
     """
 
-CHECK_EXISTING_PAN = "SELECT 1 FROM cibil_intelligence WHERE pan = %s;"
+CHECK_EXISTING_PAN = "SELECT 1 FROM credit_intelligence WHERE pan = %s;"
 EXTRACT_PAN_DETAILS = "SELECT report_json FROM cibil_reports WHERE pan_number = %s;"

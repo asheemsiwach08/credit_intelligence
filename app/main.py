@@ -5,28 +5,36 @@ from io import BytesIO
 
 from typing import Optional, Dict, Any
 
-from PyPDF2 import PdfReader
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.cibil_intelligence_agent import CibilReportGenerator, DataPersister, load_input, Settings
+from app.services.credit_intelligence_agent import CreditReportGenerator, DataPersister, load_input, Settings
 from app.utils.data_utils import calculate_recent_payments_by_lender, generate_file_name
 from app.utils.error_handling import PDFReadError, BadURLError, OpenAITimeout, ValidationError
 from app.utils.queries import EXTRACT_PAN_DETAILS
-from app.views.cibil_intelligence import _read_upload, _resolve_prompt, _validate_user_details, _extract_data_values
+from app.views.credit_intelligence import _read_upload, _resolve_prompt, _validate_user_details, _extract_data_values
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 app = FastAPI()
+# origins = ["*"]
+# app.add_middleware(CORSMiddleware, allow_origins=origins,
+#                    allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+
+
+# Sub-app for CREDIT routes
+credit_app = FastAPI()
 origins = ["*"]
-app.add_middleware(CORSMiddleware, allow_origins=origins,
+credit_app.add_middleware(CORSMiddleware, allow_origins=origins,
                    allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+
 
 # =============================================================================
 # Route handlers
 # =============================================================================
-@app.post("/generate_cibil_report", response_class=JSONResponse)
-async def generate_cibil_report(
+# @app.post("/generate_cibil_report", response_class=JSONResponse)
+@credit_app.post("/generate_credit_report", response_class=JSONResponse)
+async def generate_credit_report(
         file: Optional[UploadFile] = File(None),
         source_url: Optional[str] = Form(None),
         fallback_id: Optional[str] = Form(None),
@@ -34,7 +42,7 @@ async def generate_cibil_report(
         pdf_password: Optional[str] = Form(None),
         user_id: Optional[str] = Form(None),
 ):
-    """Generate a CIBIL intelligence report from either an uploaded file or
+    """Generate a CREDIT intelligence report from either an uploaded file or
     a source URL/raw JSON.
 
     Exactly one of file or source_url must be supplied; supplying both
@@ -81,10 +89,10 @@ async def generate_cibil_report(
     prompt_override = _resolve_prompt(prompt)
 
     # --------------------------------------------------------------------
-    # 3. Generate the report via OpenAI‑powered *CibilReportGenerator*
+    # 3. Generate the report via OpenAI‑powered *CreditReportGenerator*
     # --------------------------------------------------------------------
     try:
-        generator = CibilReportGenerator(openai_key=settings.openai_key)
+        generator = CreditReportGenerator(openai_key=settings.openai_key)
         report_json_str = generator.generate(raw_data=raw_text, prompt_override=prompt_override)
         report: Dict[str, Any] = json.loads(report_json_str)
     except (OpenAITimeout, json.JSONDecodeError) as exc:
@@ -126,3 +134,9 @@ async def generate_cibil_report(
 
     logging.info("Report generated successfully for PAN=%s", report["user_details"]["pan"])
     return JSONResponse(content=report, status_code=201)
+
+
+# ---------------------------------------------------------------------
+# Mount sub-app
+# ---------------------------------------------------------------------
+app.mount("/ai", credit_app)
