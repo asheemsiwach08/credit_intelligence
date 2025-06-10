@@ -109,5 +109,24 @@ pipeline{
                 }
             }
         }
+        stage('Run New Docker Container on Port 9000') {
+            steps {
+                script {
+                    // Run the new Docker image on port 8000 with necessary environment variables
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh """
+                            # Login to AWS ECR
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+
+                            # Run Docker container on port 9000 and pass AWS credentials to the container
+                            docker run -d -p 9000:9000 \
+                                -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+                                -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+                                ${DOCKER_REGISTRY}/${DOCKER_TAG}
+                        """
+                    }
+                }
+            }
+        }
     }
 }
