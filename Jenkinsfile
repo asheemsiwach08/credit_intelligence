@@ -129,4 +129,29 @@ pipeline{
             }
         }
     }
+    post {
+        success {
+            slackSend (
+                tokenCredentialId: 'slack_channel_secret',
+                message: "✅ Build SUCCESSFUL: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                channel: '#jenekin_update',
+                color: 'good',
+                iconEmoji: ':white_check_mark:',
+                username: 'Jenkins'
+            )
+        }
+        failure {
+            slackSend (
+                tokenCredentialId: 'slack_channel_secret',
+                message: "❌ Build FAILED: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                channel: '#jenekin_update',
+                color: 'danger',
+                iconEmoji: ':x:',
+                username: 'Jenkins'
+            )
+        }
+        always {
+            cleanWs()
+        }
+    }
 }
