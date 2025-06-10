@@ -20,7 +20,7 @@ pipeline{
             // }
             steps {
                 withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
-                    sh 'cp $ENV_FILE1 .env'
+                    sh 'sudo cp $ENV_FILE1 .env'
                 }
             }
         }
