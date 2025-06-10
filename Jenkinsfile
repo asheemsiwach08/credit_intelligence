@@ -13,6 +13,6 @@ pipeline{
                 steps {
                     checkout scm
                 }
-            }
+        }
     }
 }
