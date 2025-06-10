@@ -20,7 +20,9 @@ pipeline{
             // }
             steps {
                 withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
-                    sh 'chmod +x .'
+                    // Clean up any existing .env file
+                    sh 'rm -f .env'
+                    // Copy the injected .env file
                     sh 'cp $ENV_FILE1 .env'
                 }
             }
