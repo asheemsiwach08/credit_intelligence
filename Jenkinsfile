@@ -5,6 +5,15 @@ pipeline{
         githubPush()  // Trigger build on GitHub push
     }
 
+    environment {
+        BRANCH_NAME = "${env.BRANCH_NAME}"  // Correctly quote the variable
+        AWS_REGION = 'ap-south-1'  // Set your AWS region
+        DOCKER_REGISTRY = '676206929524.dkr.ecr.ap-south-1.amazonaws.com'  // ECR registry URL
+        DOCKER_IMAGE = 'dev-orbit-pem'  // ECR repository and image name
+        DOCKER_NAME = "ASEEM"
+        DOCKER_TAG = "${DOCKER_IMAGE}:${DOCKER_NAME}${BUILD_NUMBER}"  // Concatenate correctly
+    }
+
     stages{
         stage('Checkout') {
                 // when {
@@ -40,5 +49,28 @@ pipeline{
                 '''
             }
         }
+        stage('Login to AWS ECR') {
+            steps {
+                script {
+                    // Authenticate to AWS ECR using the AWS CLI and Jenkins credentials
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+                        """
+                    }
+                }
+            }
+        }
+        // stage('Build Docker Image') {
+        //     steps {
+        //         script {
+        //             // Build Docker image
+        //             sh """
+        //                 docker build -t ${DOCKER_TAG} .
+        //             """
+        //         }
+        //     }
+        // }
+
     }
 }
