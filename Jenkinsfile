@@ -133,7 +133,7 @@ pipeline{
         success {
             slackSend (
                 tokenCredentialId: 'slack_channel_secret',
-                message: "✅ Build SUCCESSFUL: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                message: "✅ Build SUCCESSFUL: ASHEEM${env.JOB_NAME} [${env.BUILD_NUMBER}]",
                 channel: '#jenekin_update',
                 color: 'good',
                 iconEmoji: ':white_check_mark:',
