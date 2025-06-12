@@ -18,6 +18,13 @@ class PaymentHistorySummary(BaseModel):
     class Config:
         extra = 'forbid'
 
+class UniqueAccountType(BaseModel):
+    unique_account_type: str
+    total_number_of_accounts: int
+    total_credit_or_sanctioned_limit_amount: float
+    overdue_amount: float
+    credit_exposure: float
+
 class AccountDetail(BaseModel):
     lender_name: str
     account_type: str  # e.g., "Credit Card", "Personal Loan", etc.
@@ -45,6 +52,22 @@ class EnquiryDetail(BaseModel):
     class Config:
         extra = 'forbid'
 
+class CreditCardAge(BaseModel):
+    oldest_account_age: str
+    newest_account_age: str
+    average: str
+
+class LimitsOnCreditCards(BaseModel):
+    highest_credit_available: str
+    lowest_credit_available: str
+    average_credit_available: str
+
+class AddressDetails(BaseModel):
+    address: str
+    state: str
+    pincode: str
+    date: str
+
 class UserDetails(BaseModel):
     user_name: str
     gender: str
@@ -53,6 +76,11 @@ class UserDetails(BaseModel):
     phone_number: str
     email_address: str
     pan: str
+    passport_number: str
+    driving_license_number: str
+    voter_id: str
+    ration_card_id: str
+    address_history: List[AddressDetails]
 
     class Config:
         extra = 'forbid'
@@ -97,9 +125,12 @@ class Remarks(BaseModel):
 
 class Credit_Report_Format(BaseModel):
     user_details: UserDetails
+    credit_card_age_details: CreditCardAge
+    credit_card_limits: LimitsOnCreditCards
     credit_score: CreditScore
     risk_analysis: RiskAnalysis
     account_summary: AccountSummary
+    unique_account_types: List[UniqueAccountType]
     credit_enquiries: CreditEnquiries
     account_details: List[AccountDetail]
     remarks: Remarks
