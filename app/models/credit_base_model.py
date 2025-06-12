@@ -18,8 +18,8 @@ class PaymentHistorySummary(BaseModel):
     class Config:
         extra = 'forbid'
 
-class AccountType(BaseModel):
-    account_type: str
+class UniqueAccountType(BaseModel):
+    unique_account_type: str
     total_number_of_accounts: int
     total_credit_or_sanctioned_limit_amount: float
     overdue_amount: float
@@ -130,7 +130,7 @@ class Credit_Report_Format(BaseModel):
     credit_score: CreditScore
     risk_analysis: RiskAnalysis
     account_summary: AccountSummary
-    account_types: List[AccountType]
+    unique_account_types: List[UniqueAccountType]
     credit_enquiries: CreditEnquiries
     account_details: List[AccountDetail]
     remarks: Remarks
