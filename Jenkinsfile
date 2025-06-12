@@ -68,7 +68,7 @@ pipeline{
                         sh '''
                             # Exit virtual environment if active
                             if [ -n "$VIRTUAL_ENV" ]; then deactivate; fi
-
+                            pip install cryptography
                             aws ecr get-login-password --region ${AWS_REGION} | \
                             docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
                         '''
