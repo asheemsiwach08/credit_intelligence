@@ -46,6 +46,7 @@ pipeline{
                 source venv/bin/activate
                 pip install --upgrade pip
                 pip install -r requirements.txt
+                deactivate
                 '''
             }
         }
@@ -64,14 +65,11 @@ pipeline{
         stage('Login to AWS ECR') {
             steps {
                 script {
+                    // Authenticate to AWS ECR using the AWS CLI and Jenkins credentials
                     withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                        sh '''
-                            # Exit virtual environment if active
-                            if [ -n "$VIRTUAL_ENV" ]; then deactivate; fi
-                            pip install cryptography
-                            aws ecr get-login-password --region ${AWS_REGION} | \
-                            docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
-                        '''
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+                        """
                     }
                 }
             }
