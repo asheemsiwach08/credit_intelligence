@@ -25,7 +25,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
                     sh 'rm -f .env'
-                    sh 'cp $ENV_FILE2 .env'
+                    sh 'cp $ENV_FILE1 .env'
                 }
             }
         }
