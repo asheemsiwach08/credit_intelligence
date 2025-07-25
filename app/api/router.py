@@ -17,7 +17,7 @@ from app.views.credit_intelligence import _read_upload, _resolve_prompt, _valida
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-credit_router = APIRouter()
+credit_router = APIRouter(prefix="/ai", tags=["credit intelligence report"])
 
 @credit_router.post("/generate_credit_report", response_class=JSONResponse)
 async def generate_credit_report(

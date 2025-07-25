@@ -17,7 +17,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins,
                    allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 # Include the credit router
-app.include_router(credit_router, prefix="/ai")
+app.include_router(credit_router)
 
 if __name__ == "__main__":
     import uvicorn
