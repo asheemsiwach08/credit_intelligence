@@ -12,9 +12,13 @@ app = FastAPI(
     description="API for generating credit intelligence reports",
     version="1.0.0"
 )
-origins = ["*"]
-app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include the credit router
 app.include_router(credit_router)
