@@ -69,17 +69,17 @@ class AddressDetails(BaseModel):
     date: str
 
 class UserDetails(BaseModel):
-    user_name: str
-    gender: str
-    age: int
-    date_of_birth: str
-    phone_number: str
-    email_address: str
-    pan: str
-    passport_number: str
-    driving_license_number: str
-    voter_id: str
-    ration_card_id: str
+    user_name: str = Field(default="",description="Name of the user mentioned in the credit report or data source")
+    gender: str = Field(default="",description="Gender of the user mentioned in the credit report or data source")
+    age: int = Field(default=0,description="Age of the user mentioned in the credit report or data source")
+    date_of_birth: str = Field(default="",description="Date of birth of the user mentioned in the credit report or data source")
+    phone_number: str = Field(default="",description="Phone number of the user mentioned in the credit report or data source")
+    email_address: str = Field(default="",description="Email address of the user mentioned in the credit report or data source")
+    pan: str = Field(default="",description="PAN(Permanent Account Number) number of the user,it should be a combination of10 digits with a mix of 5 alphabets then 4 digits and then 1 alphabet.")
+    passport_number: str = Field(default="",description="Passport number of the user mentioned in the credit report or data source")
+    driving_license_number: str = Field(default="",description="Driving license number of the user mentioned in the credit report or data source")
+    voter_id: str = Field(default="",description="Voter id of the user mentioned in the credit report or data source")
+    ration_card_id: str = Field(default="",description="Ration card id of the user mentioned in the credit report or data source")
     address_history: List[AddressDetails]
 
     class Config:

@@ -197,7 +197,7 @@ class CreditReportGenerator:
         *,
         raw_data: str,
         prompt: str,
-        model: str = "gpt-4.1-nano-2025-04-14",  # Update to model/SKU of your choice
+        model: str = "gpt-4.1-mini-2025-04-14",  # Update to model/SKU of your choice
     ) -> str:
         """Low‑level helper that actually calls the model. Retry decorator
         handles transient network/5xx errors with jittered exponential back‑off
@@ -215,7 +215,7 @@ class CreditReportGenerator:
                 messages=messages,
                 response_format=Credit_Report_Format,
                 timeout=60,  # seconds,
-                temperature=0,
+                temperature=0.2,
             )
         except OpenAIError:
             logging.exception("OpenAI API error")
@@ -269,7 +269,6 @@ def load_input(
 
     # -- Raw JSON payload string ------------------------------------------- #
     logging.debug("Interpreting input as raw JSON payload string")
-    print(source,"------ Credit intelligence")
     try:
         json.loads(source)
     except json.JSONDecodeError as exc:
@@ -278,56 +277,3 @@ def load_input(
         ) from exc
 
     return source, None
-
-# ------------------------------------------------------------------------------------------- #
-                                        # CLI
-# ------------------------------------------------------------------------------------------- #
-#
-# def build_arg_parser() -> argparse.ArgumentParser:
-#     p = argparse.ArgumentParser(description="Generate a  intelligence report.")
-#     p.add_argument("input", help="Path, s3:// URI, or JSON string.")
-#     p.add_argument(
-#         "-p", "--prompt",
-#         help=(
-#             "Override prompt: either a file path or literal string supplied "
-#             "by the front‑end. If absent, a sturdy expert prompt shipped with "
-#             "the backend is used."
-#         ),
-#     )
-#     p.add_argument("--pdf-password", help="Password for PDF (if encrypted)")
-#     p.add_argument("-v", "--verbose", action="count", default=0, help="Increase log verbosity")
-#     return p
-#
-#
-# def main(argv: Optional[list[str]] = None) -> None:
-#     args = build_arg_parser().parse_args(argv)
-#
-#     settings = Settings.load()
-#     persister = DataPersister(settings=settings)
-#
-#     # Resolve prompt override if provided
-#     prompt_override: Optional[str] = None
-#     if args.prompt:
-#         prompt_source = Path(args.prompt)
-#         prompt_override = (
-#             prompt_source.read_text(encoding="utf-8") if prompt_source.exists() else args.prompt
-#         )
-#         logging.debug("Prompt override provided (length=%d)", len(prompt_override))
-#
-#     raw_text, pdf_path = load_input(args.input, password=args.pdf_password)
-#
-#     generator = ReportGenerator(openai_key=settings.openai_key)
-#     logging.info("Generating  intelligence report…")
-#
-#     try:
-#         report_json = generator.generate(raw_data=raw_text, prompt_override=prompt_override)
-#         print(report_json)
-#         persister.save_json_report(report_json=report_json)
-#     except Exception:
-#         logging.exception("Failed to generate report")
-#         sys.exit(1)
-#
-#
-# # ------------------------------------------------------------------------------------------- #
-# if __name__ == "__main__":
-#     main()
