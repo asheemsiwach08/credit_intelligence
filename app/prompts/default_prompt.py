@@ -37,12 +37,15 @@ Begin processing the following raw data:
 {{RAW_CREDIT_REPORT_DATA_HERE}}
 """
 
-prompt_v2 = DEFAULT_CREDIT_PROMPT = """
+prompt_v2 = """
 You are a senior credit-risk analyst.  
 Convert the **raw CREDIT report** below into a clean, intelligence-based credit report for lenders and underwriters.
 
 ────────────────────────  REQUIRED STEPS  ────────────────────────
-1. **Extract** all key data points.  
+1. **Extract** all key data points, paying special attention to:
+   - **PAN Number**: Look for a 10-character alphanumeric code (format: 5 letters + 4 digits + 1 letter, e.g., ABCDE1234F). 
+     Search in fields like "ID", "pan", "PAN", "identification", "tax_id", or any field containing "PAN".
+     The PAN may appear with or without spaces/hyphens - extract only the alphanumeric characters.
 2. **Clean & normalise** dates (YYYY-MM-DD), numbers (no commas), and remove duplicates/inconsistencies.  
 3. **Analyse** risk and give a lending recommendation.  
 4. **Output exactly one valid JSON object** that conforms to the schema shown.  
