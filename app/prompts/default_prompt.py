@@ -42,10 +42,20 @@ You are a senior credit-risk analyst.
 Convert the **raw CREDIT report** below into a clean, intelligence-based credit report for lenders and underwriters.
 
 ────────────────────────  REQUIRED STEPS  ────────────────────────
-1. **Extract** all key data points, paying special attention to:
-   - **PAN Number**: Look for a 10-character alphanumeric code (format: 5 letters + 4 digits + 1 letter, e.g., ABCDE1234F). 
-     Search in fields like "ID", "pan", "PAN", "identification", "tax_id", or any field containing "PAN".
-     The PAN may appear with or without spaces/hyphens - extract only the alphanumeric characters.
+1. **Extract** all key data points, with MANDATORY PAN extraction:
+   
+   **🔍 PAN NUMBER EXTRACTION (CRITICAL - NEVER SKIP):**
+   - PAN is EXACTLY 10 characters: 5 UPPERCASE letters + 4 digits + 1 UPPERCASE letter
+   - Examples: ABCDE1234F, PANPM1234C, BQRPS9876K
+   - Search EVERYWHERE in the data for this pattern:
+     ✓ Fields named: "ID", "pan", "PAN", "Pan", "identification", "tax id", "taxpan", "permanent_account_number"
+     ✓ Any field containing "PAN" in the name (case-insensitive)
+     ✓ Any field with exactly 10 alphanumeric characters matching the pattern
+     ✓ Look in customer details, personal info, identification sections
+     ✓ Check arrays/lists for objects containing PAN data
+   - Clean formatting: Remove spaces, hyphens, dots (ABCD-E123-4F → ABCDE1234F)
+   - If found ANYWHERE, extract it. If multiple PANs found, use the first valid one.
+   - DOUBLE-CHECK: Ensure it matches [A-Z]{5}[0-9]{4}[A-Z]{1} pattern before including.
 2. **Clean & normalise** dates (YYYY-MM-DD), numbers (no commas), and remove duplicates/inconsistencies.  
 3. **Analyse** risk and give a lending recommendation.  
 4. **Output exactly one valid JSON object** that conforms to the schema shown.  
