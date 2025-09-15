@@ -38,7 +38,87 @@ The API will be available at:
 
 ## API Endpoints
 
-### POST `/ai/generate_credit_report`
+### Health and Monitoring Endpoints
+
+#### GET `/healthz`
+Basic liveness probe that checks if the application process is running.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "process_id": 12345,
+  "uptime_seconds": 3600.5
+}
+```
+
+#### GET `/readyz`
+Comprehensive readiness probe that checks all dependencies including database, OpenAI API, and AWS S3.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "checks": {
+    "database": {
+      "status": "healthy",
+      "response_time_ms": 45.2,
+      "message": "Database connection successful"
+    },
+    "openai": {
+      "status": "healthy",
+      "response_time_ms": 120.5,
+      "message": "OpenAI API connection successful",
+      "models_available": 15
+    },
+    "aws_s3": {
+      "status": "healthy",
+      "response_time_ms": 85.3,
+      "message": "S3 connection successful",
+      "bucket": "your-s3-bucket"
+    },
+    "system_resources": {
+      "status": "healthy",
+      "memory_percent": 45.2,
+      "disk_percent": 32.1,
+      "cpu_percent": 15.8,
+      "warnings": [],
+      "message": "System resources within normal range"
+    }
+  }
+}
+```
+
+#### GET `/info`
+Application information including version, git SHA, build time, and environment details.
+
+**Response:**
+```json
+{
+  "app_name": "Credit Intelligence API",
+  "version": "1.0.0",
+  "git_sha": "abc123def456...",
+  "build_time": "2024-01-15T09:00:00.000Z",
+  "python_version": "3.12.0",
+  "environment": "production",
+  "timestamp": "2024-01-15T10:30:00.000Z"
+}
+```
+
+#### GET `/metrics`
+Prometheus-formatted metrics for monitoring and observability.
+
+**Response:** Plain text in Prometheus format including:
+- HTTP request counts and durations
+- System resource usage (CPU, memory, disk)
+- Database and external API connection status
+- Active connections and other application metrics
+
+### Business Logic Endpoints
+
+#### POST `/ai/generate_credit_report`
 
 Generate a credit intelligence report from various input sources.
 
@@ -77,6 +157,56 @@ ENV_POSTGRES_USER=postgres
 ENV_POSTGRES_PASSWORD=your_password
 ENV_POSTGRES_DB=postgres
 ENV_POSTGRES_TABLE=credit_intelligence
+
+# Optional - Build Information (for /info endpoint)
+BUILD_TIME=2024-01-15T09:00:00.000Z
+ENV=production
+```
+
+## Monitoring and Observability
+
+The application provides comprehensive health checks and monitoring capabilities:
+
+### Health Checks
+
+- **Liveness Probe** (`/healthz`): Quick check to verify the application is running
+- **Readiness Probe** (`/readyz`): Comprehensive check of all dependencies
+- **Application Info** (`/info`): Version, build, and environment information
+
+### Metrics
+
+The `/metrics` endpoint provides Prometheus-compatible metrics including:
+
+- **HTTP Metrics**: Request counts, durations, and status codes
+- **System Metrics**: CPU, memory, and disk usage
+- **Dependency Status**: Database, OpenAI API, and S3 connectivity
+- **Application Metrics**: Process information and resource usage
+
+### Kubernetes Integration
+
+These endpoints are designed to work seamlessly with Kubernetes:
+
+```yaml
+# Example Kubernetes deployment with health checks
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+      - name: credit-intelligence-api
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
 ```
 
 ## Troubleshooting

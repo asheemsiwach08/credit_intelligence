@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI
 from app.api.router import credit_router
+from app.api.health_router import health_router
 from fastapi.middleware.cors import CORSMiddleware
 
 # Set up logging
@@ -20,8 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include the credit router
+# Include routers
 app.include_router(credit_router)
+app.include_router(health_router)
 
 if __name__ == "__main__":
     import uvicorn

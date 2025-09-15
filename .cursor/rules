@@ -1,0 +1,35 @@
+# Cursor IDE Rules for Credit Intelligence API
+
+## Health Endpoints Implementation
+
+The application now includes comprehensive health and monitoring endpoints:
+
+### Endpoints Added:
+- GET /healthz → Basic liveness check (process up)
+- GET /readyz → Comprehensive readiness check (DB, OpenAI API, S3)
+- GET /info → Application version, git SHA, build time
+- GET /metrics → Prometheus-formatted metrics
+
+### Implementation Details:
+- Health service (`app/services/health_service.py`) handles all health checks
+- Health router (`app/api/health_router.py`) provides FastAPI endpoints
+- Prometheus metrics integration for observability
+- Kubernetes-ready liveness and readiness probes
+- Comprehensive dependency checking (PostgreSQL, OpenAI, AWS S3)
+- System resource monitoring (CPU, memory, disk)
+
+### Dependencies Added:
+- prometheus_client==0.19.0
+- psutil==5.9.6
+
+### Documentation:
+- README.md updated with complete health endpoint documentation
+- Kubernetes deployment examples included
+- Monitoring and observability section added
+
+### Files Modified/Created:
+- requirements.txt - Added prometheus and psutil dependencies
+- app/main.py - Integrated health router
+- app/services/health_service.py - Core health checking logic
+- app/api/health_router.py - FastAPI health endpoints with Prometheus metrics
+- README.md - Comprehensive documentation update

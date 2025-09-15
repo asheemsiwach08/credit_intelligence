@@ -10,4 +10,6 @@ uvicorn==0.34.1
 python-multipart
 pandas==2.2.3
 cryptography
+prometheus_client==0.19.0
+psutil==5.9.6
 
