@@ -197,7 +197,7 @@ class CreditReportGenerator:
         *,
         raw_data: str,
         prompt: str,
-        model: str = "gpt-4.1-mini-2025-04-14",  # Update to model/SKU of your choice
+        model: str = "gpt-4.1-nano-2025-04-14",  # Update to model/SKU of your choice
     ) -> str:
         """Low‑level helper that actually calls the model. Retry decorator
         handles transient network/5xx errors with jittered exponential back‑off
