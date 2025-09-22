@@ -68,7 +68,7 @@ class Settings:
             pwd = os.getenv("ENV_POSTGRES_PASSWORD", "")
             dbname = os.getenv("ENV_POSTGRES_DB", "postgres")
             dsn = f"host={host} port={port} dbname={dbname} user={user} password={pwd}"
-            logging.info(f"Postgres DSN: {dsn}")
+            logging.info(f"PostgreSQL connection configured successfully")
         else:
             dsn = None
 
@@ -161,7 +161,7 @@ class DataPersister:
             logging.debug("PostgreSQL DSN not configured – skipping JSON persistence")
             return
 
-        logging.info("Persisting report to table %s", self._pg_table)
+        # logging.info("Persisting report to table %s", self._pg_table)
         pan = data_values[0]  # assuming PAN is always the first value
         insert_query = credit_report_insert_query
         update_query = UPDATE_CREDIT_REPORT
@@ -174,7 +174,7 @@ class DataPersister:
             if exists:
                 update_values =  data_values[1:] + [pan]  # all except PAN, then PAN at end
                 cur.execute(update_query, update_values)
-                logging.info("Updated existing record for PAN: %s", pan)
+                logging.info("Updated existing record successfully")
             else:
                 cur.execute(insert_query, data_values)
                 logging.info("Inserted new record for PAN: %s", pan)
