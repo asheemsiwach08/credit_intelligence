@@ -113,7 +113,7 @@ async def generate_credit_report(
             upload_bytes = await file.read()  # <== CORRECT way to read async UploadFile
             file_stream = BytesIO(upload_bytes)
             persister.upload_pdf(file_object=file_stream, report_id=file_name)
-            logging.info("PDF file uploaded as %s", file_name)
+            logging.info("PDF file uploaded successfully")
         except Exception as exc:
             logging.error("Failed to upload file to S3: %s", exc)
             raise HTTPException(status_code=500, detail="Failed to upload PDF file.")

@@ -1,8 +1,7 @@
 pipeline {
     agent {
-        label "${env.BRANCH_NAME == 'dev_main' ? 'dev-agent' : ''}"
+        label "${env.BRANCH_NAME == 'dev_main' ? 'dev-agent' : 'main'}"
     }
-    
 
     triggers {
         githubPush()
