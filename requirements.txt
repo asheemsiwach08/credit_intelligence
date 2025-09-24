@@ -14,6 +14,7 @@ pandas==2.2.3
 cryptography
 prometheus_client==0.19.0
 psutil==5.9.6
+pytz==2023.3
 supabase==2.20.0
 supabase_auth==2.20.0
 supabase_functions==2.20.0

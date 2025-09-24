@@ -31,7 +31,7 @@ def process_single_lender(lender_data, table_name):
         return {"status": "error", "lender": lender_data.get('lender_name', 'Unknown'), "error": str(e)}
 
 #Method to process lenders in parallel
-def process_lenders_parallel(lenders_data, table_name, max_concurrent=2):
+def process_lenders_parallel(lenders_data, table_name, max_concurrent=5):
     """Process lenders in parallel with limited concurrency"""
     results = []
     
@@ -61,8 +61,8 @@ def scrape_lenders_roi(request: SnifferLendersRoiRequest):
 
     # Validate the request
     if not request.table_name:
-        logger.error("❌ Table name is required")
-        raise HTTPException(status_code=400, detail="Table name is required")
+        logger.error("❌ Table name is required. Please check the table name")
+        raise HTTPException(status_code=400, detail="Table name is required. Please check the table name")
 
     logger.info(f"Lenders ROI request: {request}")
 
@@ -70,12 +70,12 @@ def scrape_lenders_roi(request: SnifferLendersRoiRequest):
     try:
         lenders_sql_response = database_service.run_sql(query=f"Select id, lender_name from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day'")
     except Exception as e:
-        logger.debug(f"❌ Error extracting lender name from database: {e}")
+        logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     if not lenders_sql_response["data"]:
-        logger.debug("❌ No lenders found in the database")
-        raise HTTPException(status_code=404, detail="No lenders found in the database")
+        logger.debug(f"❌ No data found from {request.table_name} table in database for the selected interval. Please check the interval and table name")
+        raise HTTPException(status_code=404, detail=f"No data found from {request.table_name} table in database for the selected interval. Please check the interval and table name")
     else:
         lenders_data = lenders_sql_response["data"]
         logger.info(f"✅ Found {len(lenders_data)} lenders to process")
