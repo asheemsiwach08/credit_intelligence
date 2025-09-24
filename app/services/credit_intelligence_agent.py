@@ -1,16 +1,14 @@
-import os
 import json
 import logging
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Optional, Union, Tuple, List
 
 import psycopg2
 
 import boto3
-from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
+from app.config.settings import settings
 from app.utils.data_loaders import load_data
 from app.prompts.default_prompt import prompt_v2
 from app.models.credit_base_model import Credit_Report_Format
@@ -23,91 +21,94 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-@dataclass(frozen=True)
-class Settings:
-    """
-    Runtime secrets + toggles loaded from env vars.
+# @dataclass(frozen=True)
+# class Settings:
+#     """
+#     Runtime secrets + toggles loaded from env vars.
 
-    * `openai_key`      – OpenAI API key (required)
-    * `s3_bucket`       – S3 bucket name for PDF uploads (optional)
-    * `aws_access_key`  – AWS Access Key ID for S3 (optional)
-    * `aws_secret_key`  – AWS Secret Access Key for S3 (optional)
-    * `aws_region`      – AWS Region for S3 (optional)
-    * `pg_dsn`          – libpq-style DSN for PostgreSQL (optional)
-    * `pg_table`        – table name for persisting reports
-    """
+#     * `openai_key`      – OpenAI API key (required)
+#     * `s3_bucket`       – S3 bucket name for PDF uploads (optional)
+#     * `aws_access_key`  – AWS Access Key ID for S3 (optional)
+#     * `aws_secret_key`  – AWS Secret Access Key for S3 (optional)
+#     * `aws_region`      – AWS Region for S3 (optional)
+#     * `pg_dsn`          – libpq-style DSN for PostgreSQL (optional)
+#     * `pg_table`        – table name for persisting reports
+#     """
 
-    openai_key: str
-    s3_bucket: Optional[str]
-    aws_access_key: Optional[str]
-    aws_secret_key: Optional[str]
-    aws_region: Optional[str]
-    pg_dsn: Optional[str]
-    pg_table: str
+#     openai_key: str
+#     s3_bucket: Optional[str]
+#     aws_access_key: Optional[str]
+#     aws_secret_key: Optional[str]
+#     aws_region: Optional[str]
+#     pg_dsn: Optional[str]
+#     pg_table: str
 
-    @staticmethod
-    def load() -> "Settings":
-        load_dotenv()
+#     @staticmethod
+#     def load() -> "Settings":
+#         load_dotenv()
 
-        # --- required OpenAI key ---
-        key = os.getenv("CREDIT_OPENAI_KEY")
-        if not key:
-            raise RuntimeError("Missing required OpenAI key (CREDIT_OPENAI_KEY)")
+#         # --- required OpenAI key ---
+#         key = os.getenv("CREDIT_OPENAI_KEY")
+#         if not key:
+#             raise RuntimeError("Missing required OpenAI key (CREDIT_OPENAI_KEY)")
 
-        # --- optional S3 config ---
-        bucket = os.getenv("ENV_S3_BUCKET")
-        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        aws_region = os.getenv("AWS_REGION")
+#         # --- optional S3 config ---
+#         bucket = os.getenv("ENV_S3_BUCKET")
+#         aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+#         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+#         aws_region = os.getenv("AWS_REGION")
 
-        # --- optional Postgres DSN ---
-        host = os.getenv("ENV_POSTGRES_HOST")
-        if host:
-            port = os.getenv("ENV_POSTGRES_PORT", "5432")
-            user = os.getenv("ENV_POSTGRES_USER", "postgres")
-            pwd = os.getenv("ENV_POSTGRES_PASSWORD", "")
-            dbname = os.getenv("ENV_POSTGRES_DB", "postgres")
-            dsn = f"host={host} port={port} dbname={dbname} user={user} password={pwd}"
-            logging.info(f"PostgreSQL connection configured successfully")
-        else:
-            dsn = None
+#         # --- optional Postgres DSN ---
+#         host = os.getenv("ENV_POSTGRES_HOST")
+#         if host:
+#             port = os.getenv("ENV_POSTGRES_PORT", "5432")
+#             user = os.getenv("ENV_POSTGRES_USER", "postgres")
+#             pwd = os.getenv("ENV_POSTGRES_PASSWORD", "")
+#             dbname = os.getenv("ENV_POSTGRES_DB", "postgres")
+#             dsn = f"host={host} port={port} dbname={dbname} user={user} password={pwd}"
+#             logging.info(f"✅ PostgreSQL connection configured successfully")
+#         else:
+#             dsn = None
+#             logging.info(f"❌ PostgreSQL connection not configured")
 
-        # --- default table name ---
-        table = os.getenv("ENV_POSTGRES_TABLE", "credit_intelligence")
+#         # --- default table name ---
+#         table = os.getenv("ENV_POSTGRES_TABLE", "credit_intelligence")
 
-        return Settings(
-            openai_key=key,
-            s3_bucket=bucket,
-            aws_access_key=aws_access_key,
-            aws_secret_key=aws_secret_key,
-            aws_region=aws_region,
-            pg_dsn=dsn,
-            pg_table=table,
-        )
+#         return Settings(
+#             openai_key=key,
+#             s3_bucket=bucket,
+#             aws_access_key=aws_access_key,
+#             aws_secret_key=aws_secret_key,
+#             aws_region=aws_region,
+#             pg_dsn=dsn,
+#             pg_table=table,
+#         )
 
 # ------------------------------------------------------------------------------------------- #
                                     # Persistent Layer
 # ------------------------------------------------------------------------------------------- #
 class DataPersister:
 
-    def __init__(self, *, settings: Settings):
-        self._pg_dsn = settings.pg_dsn
-        self._pg_table = settings.pg_table
+    def __init__(self):
+        # self._pg_dsn = settings.POSTGRES_DSN
+        self._pg_table = settings.POSTGRES_TABLE
 
-        self._pg_conn = psycopg2.connect(self._pg_dsn) if self._pg_dsn else None
+        dsn = f"host={settings.POSTGRES_HOST} port={settings.POSTGRES_PORT} dbname={settings.POSTGRES_DB} user={settings.POSTGRES_USER} password={settings.POSTGRES_PASSWORD}"
+
+        self._pg_conn = psycopg2.connect(dsn) if dsn else None
         if self._pg_conn:
             self._pg_conn.autocommit = True
 
         # S3
-        self._s3_bucket = settings.s3_bucket
+        self._s3_bucket = settings.S3_BUCKET
         self._s3_client = (
             boto3.client(
                 "s3",
-                aws_access_key_id=settings.aws_access_key,
-                aws_secret_access_key=settings.aws_secret_key,
-                region_name=settings.aws_region,
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_REGION,
             )
-            if settings.s3_bucket
+            if settings.S3_BUCKET
             else None
             )
 
@@ -136,7 +137,7 @@ class DataPersister:
                 Bucket=self._s3_bucket,
                 Key=object_key,
             )
-            logging.debug("File pushed to the S3 bucket.")
+            logging.debug("✅ File pushed to the S3 bucket.")
         except Exception as e:
             logging.error("Failed to upload file to S3: %s", e)
 
@@ -146,7 +147,7 @@ class DataPersister:
             logging.debug("PostgreSQL DSN not configured - skipping JSON persistence")
             return ""
 
-        logging.info("Fetching JSON data of user for  Score.")
+        logging.info("✅ Fetching JSON data of user for  Score.")
         with self._pg_conn.cursor() as cur:
             cur.execute(*query)
             user_data = cur.fetchone()
@@ -174,10 +175,10 @@ class DataPersister:
             if exists:
                 update_values =  data_values[1:] + [pan]  # all except PAN, then PAN at end
                 cur.execute(update_query, update_values)
-                logging.info("Updated existing record successfully")
+                logging.info("✅ Updated existing record successfully")
             else:
                 cur.execute(insert_query, data_values)
-                logging.info("Inserted new record for PAN: %s", pan)
+                logging.info("✅ Inserted new record for PAN: %s", pan)
 
 # ------------------------------------------------------------------------------------------- #
                                     # Core generator
@@ -188,8 +189,8 @@ class CreditReportGenerator:
     use‑case requires lower latency or partial responses.
     """
 
-    def __init__(self, openai_key: str) -> None:
-        self._client = OpenAI(api_key=openai_key)
+    def __init__(self) -> None:
+        self._client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     @retry(wait=wait_random_exponential(min=5, max=60), stop=stop_after_attempt(5))
     def _call_llm(
@@ -197,7 +198,7 @@ class CreditReportGenerator:
         *,
         raw_data: str,
         prompt: str,
-        model: str = "gpt-4.1-nano-2025-04-14",  # Update to model/SKU of your choice
+        model: str = settings.CREDIT_INTELLIGENCE_OPENAI_MODEL,  # Update to model/SKU of your choice
     ) -> str:
         """Low‑level helper that actually calls the model. Retry decorator
         handles transient network/5xx errors with jittered exponential back‑off
@@ -207,7 +208,7 @@ class CreditReportGenerator:
             {"role": "system", "content": prompt},
             {"role": "user", "content": raw_data},
         ]
-        logging.debug("Sending %d messages to model=%s", len(messages), model)
+        logging.debug("✅ Sending %d messages to model=%s", len(messages), model)
 
         try:
             response = self._client.beta.chat.completions.parse(
@@ -257,7 +258,7 @@ def load_input(
     # -- Local file -------------------------------------------------------- #
     maybe_path = Path(source)
     if maybe_path.exists():
-        logging.debug("Loading local file %s via load_data()", maybe_path)
+        logging.debug("✅ Loading local file %s via load_data()", maybe_path)
         raw = load_data(str(maybe_path), password=password)
         return raw, maybe_path if maybe_path.suffix.lower() == ".pdf" else None
 

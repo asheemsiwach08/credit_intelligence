@@ -1,18 +1,38 @@
+import sys
 import logging
 
 from fastapi import FastAPI
-from app.api.router import credit_router
-from app.api.health_router import health_router
+from app.api.router import api_router
+from app.config.settings import settings
 from fastapi.middleware.cors import CORSMiddleware
 
+
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('basicverify.log')
+    ]
+)
+
+# Suppress httpx request logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+# Suppress other noisy loggers if needed
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Credit Intelligence API",
-    description="API for generating credit intelligence reports",
-    version="1.0.0"
+    title=settings.API_TITLE,
+    description=settings.API_DESCRIPTION,
+    version=settings.API_VERSION
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,14 +42,13 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(credit_router)
-app.include_router(health_router)
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "app.main:app", 
-        host="0.0.0.0", 
-        port=9000, 
-        reload=True
+        host=settings.HOST, 
+        port=settings.PORT, 
+        reload=settings.DEBUG
     ) 

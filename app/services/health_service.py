@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import subprocess
@@ -10,14 +9,22 @@ import psutil
 import psycopg2
 from openai import OpenAI
 
-from app.services.credit_intelligence_agent import Settings
+from app.config.settings import settings
 
 
 class HealthService:
     """Service for checking application health and dependencies."""
     
     def __init__(self):
-        self.settings = Settings.load()
+        host = settings.POSTGRES_HOST
+        port = settings.POSTGRES_PORT
+        dbname = settings.POSTGRES_DB
+        user = settings.POSTGRES_USER
+        password = settings.POSTGRES_PASSWORD
+        dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
+        self.dsn = dsn
+        self.openai_api_key = settings.OPENAI_API_KEY
+        self.s3_bucket = settings.S3_BUCKET
         self.logger = logging.getLogger(__name__)
     
     async def check_liveness(self) -> Dict[str, Any]:
@@ -64,7 +71,8 @@ class HealthService:
         """Check PostgreSQL database connectivity."""
         try:
             # Only check if database is configured (using pg_dsn)
-            if not self.settings.pg_dsn:
+            
+            if not self.dsn:
                 return {
                     "status": "skipped",
                     "message": "Database not configured",
@@ -72,7 +80,7 @@ class HealthService:
                 }
             
             start_time = time.time()
-            conn = psycopg2.connect(self.settings.pg_dsn, connect_timeout=5)
+            conn = psycopg2.connect(self.dsn, connect_timeout=5)
             
             # Simple query to test connectivity
             cursor = conn.cursor()
@@ -100,7 +108,7 @@ class HealthService:
     async def _check_openai(self) -> Dict[str, Any]:
         """Check OpenAI API connectivity."""
         try:
-            if not self.settings.openai_key:
+            if not self.openai_api_key:
                 return {
                     "status": "unhealthy",
                     "message": "OpenAI API key not configured",
@@ -108,7 +116,7 @@ class HealthService:
                 }
             
             start_time = time.time()
-            client = OpenAI(api_key=self.settings.openai_key)
+            client = OpenAI(api_key=self.openai_api_key)
             
             # Simple API call to test connectivity
             models = client.models.list()
@@ -136,7 +144,7 @@ class HealthService:
             from botocore.exceptions import ClientError, NoCredentialsError
             
             # Only check if S3 is configured
-            if not self.settings.s3_bucket:
+            if not self.s3_bucket:
                 return {
                     "status": "skipped",
                     "message": "S3 not configured",
@@ -147,14 +155,14 @@ class HealthService:
             s3_client = boto3.client('s3')
             
             # Try to list objects in the bucket (with limit to avoid large responses)
-            s3_client.list_objects_v2(Bucket=self.settings.s3_bucket, MaxKeys=1)
+            s3_client.list_objects_v2(Bucket=self.s3_bucket, MaxKeys=1)
             response_time = (time.time() - start_time) * 1000
             
             return {
                 "status": "healthy",
                 "response_time_ms": round(response_time, 2),
                 "message": "S3 connection successful",
-                "bucket": self.settings.s3_bucket
+                "bucket": self.s3_bucket
             }
             
         except NoCredentialsError:

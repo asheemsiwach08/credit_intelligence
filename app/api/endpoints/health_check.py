@@ -57,13 +57,13 @@ OPENAI_CONNECTION_STATUS = Gauge(
 )
 
 # Health router
-health_router = APIRouter(tags=["health"])
+router = APIRouter(tags=["health"])
 
 # Initialize health service
 health_service = HealthService()
 
 
-@health_router.get("/healthz")
+@router.get("/healthz")
 async def liveness_check():
     """
     Basic liveness probe - checks if the application is running.
@@ -81,7 +81,7 @@ async def liveness_check():
         raise HTTPException(status_code=500, detail="Liveness check failed")
 
 
-@health_router.get("/readyz")
+@router.get("/readyz")
 async def readiness_check():
     """
     Comprehensive readiness probe - checks all dependencies.
@@ -115,7 +115,7 @@ async def readiness_check():
         raise HTTPException(status_code=500, detail="Readiness check failed")
 
 
-@health_router.get("/info")
+@router.get("/info")
 async def app_info():
     """
     Application information endpoint.
@@ -133,7 +133,7 @@ async def app_info():
         raise HTTPException(status_code=500, detail="App info retrieval failed")
 
 
-@health_router.get("/metrics", response_class=PlainTextResponse)
+@router.get("/metrics", response_class=PlainTextResponse)
 async def metrics():
     """
     Prometheus metrics endpoint.
