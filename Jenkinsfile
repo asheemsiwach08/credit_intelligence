@@ -40,7 +40,7 @@ pipeline {
                 def envCredId
                 switch (env.BRANCH_NAME) {
                     case 'dev_main':
-                    envCredId = 'credi-dev'   // Jenkins "Secret file" credential for DEV
+                    envCredId = 'credit-dev'   // Jenkins "Secret file" credential for DEV
                     break
                     case 'main':
                     envCredId = 'credit-main'  // Jenkins "Secret file" credential for MAIN/PROD
