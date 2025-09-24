@@ -23,11 +23,37 @@ pipeline {
             }
         }
 
-        stage('Inject .env from Jenkins Secret File') {
+        // stage('Inject .env from Jenkins Secret File') {
+        //     steps {
+        //         withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
+        //             sh 'rm -f .env'
+        //             sh 'cp $ENV_FILE1 .env'
+        //         }
+        //     }
+        // }
+
+
+        stage('Inject .env') {
             steps {
-                withCredentials([file(credentialsId: 'aseem_env', variable: 'ENV_FILE1')]) {
-                    sh 'rm -f .env'
-                    sh 'cp $ENV_FILE1 .env'
+                script {
+                // Choose the secret .env strictly by branch
+                def envCredId
+                switch (env.BRANCH_NAME) {
+                    case 'dev_main':
+                    envCredId = 'credit-dev'   // Jenkins "Secret file" credential for DEV
+                    break
+                    case 'main':
+                    envCredId = 'credit-main'  // Jenkins "Secret file" credential for MAIN/PROD
+                    break
+                    default:
+                    error "Unsupported branch '${env.BRANCH_NAME}'. Only 'dev_main' and 'main' are allowed."
+                }
+                echo "Using .env from credentials: ${envCredId}"
+                withCredentials([file(credentialsId: envCredId, variable: 'ENV_FILE')]) {
+                    sh 'cp "$ENV_FILE" .env'
+                    // Optional sanity check without leaking secrets:
+                    // sh '[ -s .env ] || { echo ".env missing or empty"; exit 1; }'
+                }
                 }
             }
         }
