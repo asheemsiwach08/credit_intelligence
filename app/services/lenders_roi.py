@@ -1,7 +1,8 @@
 import uuid
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
+import pytz
 
 from app.config.settings import settings
 from app.services.database_service import database_service
@@ -41,7 +42,7 @@ class ScrapeLendersROI:
                 6. approval time, 
                 7. processing fee, 
                 8. special Offers
-                for home loan in India for {lender_name} effective from {datetime.now().strftime("%B, %Y")}."""
+                for home loan in India for {lender_name} effective from {datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%B, %Y")}."""
         logger.info(f"Searching for {lender_name} ROI from Google")
         # breakpoint()
 
@@ -83,8 +84,8 @@ class ScrapeLendersROI:
                 structured_response["lender_name"] = lender_name
                 structured_response["home_loan_roi"] = structured_response.pop("interest_rate_range")
                 structured_response["lap_roi"] = structured_response.pop("loan_to_value")
-                structured_response["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                logger.info(f"Structured response created successfully")
+                structured_response["updated_at"] = datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S")
+                logger.info(f"✅ Structured response created successfully")
                 # breakpoint()
             except Exception as e:
                 logger.error(f"Error reformatting structured response: {e}")

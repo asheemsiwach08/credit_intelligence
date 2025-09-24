@@ -20,28 +20,28 @@ class DatabaseService:
         self.supabase_service_role_key = settings.SUPABASE_SERVICE_ROLE_KEY 
         
         if not self.supabase_url or not self.supabase_service_role_key:
-            logger.error("WARNING: Supabase credentials not configured.")
+            logger.error("❌ WARNING: Supabase credentials not configured.")
             logger.error("Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.")
             self.client = None
         else:
             try:
                 self.client = create_client(self.supabase_url, self.supabase_service_role_key)
             except Exception as e:
-                logger.error(f"Error initializing Supabase client: {e}")
+                logger.error(f"❌ Error initializing Supabase client: {e}")
                 self.client = None
 
     
     def save_data(self, data: dict, table_name: str):
         """Save data to the database"""
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return None
         
         try:
             response = self.client.table(table_name).insert(data).execute()
             return response
         except Exception as e:
-            logger.error(f"Error saving data to {table_name}: {e}")
+            logger.error(f"❌ Error saving data to {table_name}: {e}")
             return None
     
     def _add_uuid_if_missing(self, data: dict, primary_key: str = "id") -> dict:
@@ -50,7 +50,7 @@ class DatabaseService:
         primary_key = "id"
         if primary_key not in data or data[primary_key] in [None, ""]:
             data[primary_key] = str(uuid.uuid4())
-            logger.info(f"Generated UUID for missing primary key '{primary_key}': {data[primary_key]}")
+            logger.info(f"✅ Generated UUID for missing primary key '{primary_key}': {data[primary_key]}")
         return data
 
     def save_unique_data(self, data: dict, table_name: str, update_if_exists: bool = True):
@@ -67,7 +67,7 @@ class DatabaseService:
             dict: Result with status and details
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {"status": "error", "message": "Database client not initialized"}
 
         # Add UUID if primary key is missing (always use "id")
@@ -83,7 +83,7 @@ class DatabaseService:
             if update_if_exists:
                 # Update existing record
                 response = self.client.table(table_name).update(data).eq("id", primary_value).execute()
-                logger.info(f"Updated existing record in {table_name} where id={primary_value}")
+                logger.info(f"✅ Updated existing record in {table_name} where id={primary_value}")
 
                 return {
                     "status": "updated",
@@ -94,7 +94,7 @@ class DatabaseService:
                 }
             else:
                 # Skip duplicate
-                logger.info(f"Skipped duplicate record in {table_name} where id={primary_value}")
+                logger.info(f"❌ Skipped duplicate record in {table_name} where id={primary_value}")
                 return {
                     "status": "skipped",
                     "message": f"Record already exists",
@@ -105,7 +105,7 @@ class DatabaseService:
         else:
             # Insert new record
             response = self.client.table(table_name).insert(data).execute()
-            logger.info(f"Inserted new record in {table_name}")
+            logger.info(f"✅ Inserted new record in {table_name}")
             return {
                 "status": "inserted",
                 "message": f"New record created successfully",
@@ -132,7 +132,7 @@ class DatabaseService:
             dict: Batch operation results
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {"status": "error", "message": "Database client not initialized"}
         
         results = {
@@ -175,7 +175,7 @@ class DatabaseService:
                     "message": str(e)
                 })
         
-        logger.info(f"Batch operation completed: {results['inserted']} inserted, {results['updated']} updated, {results['skipped']} skipped, {results['errors']} errors")
+        logger.info(f"✅ Batch operation completed: {results['inserted']} inserted, {results['updated']} updated, {results['skipped']} skipped, {results['errors']} errors")
         return results
     
     def save_with_multiple_key_check(self, data: dict, table_name: str, unique_fields: List[str], update_if_exists: bool = True):
@@ -192,13 +192,13 @@ class DatabaseService:
             dict: Result with status and details
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {"status": "error", "message": "Database client not initialized"}
         
         # Check if all unique fields exist in data
         missing_fields = [field for field in unique_fields if field not in data]
         if missing_fields:
-            logger.error(f"Unique fields {missing_fields} not found in data")
+            logger.error(f"❌ Unique fields {missing_fields} not found in data")
             return {"status": "error", "message": f"Missing unique fields: {missing_fields}"}
         
         try:
@@ -219,7 +219,7 @@ class DatabaseService:
                         update_query = update_query.eq(field, data[field])
                     
                     response = update_query.execute()
-                    logger.info(f"Updated existing record in {table_name} with unique fields {unique_fields}")
+                    logger.info(f"✅ Updated existing record in {table_name} with unique fields {unique_fields}")
                     return {
                         "status": "updated",
                         "message": f"Record updated successfully",
@@ -229,7 +229,7 @@ class DatabaseService:
                     }
                 else:
                     # Skip duplicate
-                    logger.info(f"Skipped duplicate record in {table_name} with unique fields {unique_fields}")
+                    logger.info(f"❌ Skipped duplicate record in {table_name} with unique fields {unique_fields}")
                     return {
                         "status": "skipped",
                         "message": f"Record already exists",
@@ -240,7 +240,7 @@ class DatabaseService:
             else:
                 # Insert new record
                 response = self.client.table(table_name).insert(data).execute()
-                logger.info(f"Inserted new record in {table_name}")
+                logger.info(f"✅ Inserted new record in {table_name}")
                 return {
                     "status": "inserted",
                     "message": f"New record created successfully",
@@ -250,7 +250,7 @@ class DatabaseService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error saving data with multiple key check to {table_name}: {e}")
+            logger.error(f"❌ Error saving data with multiple key check to {table_name}: {e}")
             return {"status": "error", "message": str(e)}
     
     def get_existing_records(self, table_name: str, field_name: str, values: List[str]):
@@ -266,7 +266,7 @@ class DatabaseService:
             dict: Existing records grouped by field value
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {}
         
         try:
@@ -282,20 +282,20 @@ class DatabaseService:
             return existing_records
             
         except Exception as e:
-            logger.error(f"Error getting existing records from {table_name}: {e}")
+            logger.error(f"❌ Error getting existing records from {table_name}: {e}")
             return {}
         
     def update_data(self, data: dict, table_name: str):
         """Update data in the database"""
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return None
         
         try:
             response = self.client.table(table_name).update(data).execute()
             return response
         except Exception as e:
-            logger.error(f"Error updating data in {table_name}: {e}")
+            logger.error(f"❌ Error updating data in {table_name}: {e}")
             return None
 
     def check_table_exists(self, table_name: str) -> bool:
@@ -309,7 +309,7 @@ class DatabaseService:
             bool: True if table exists, False otherwise
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return False
             
         try:
@@ -317,7 +317,7 @@ class DatabaseService:
             response = self.client.table(table_name).select("*").limit(0).execute()
             return True
         except Exception as e:
-            logger.info(f"Table {table_name} does not exist: {e}")
+            logger.info(f"❌ Table {table_name} does not exist: {e}")
             return False
 
     def create_table_from_columns(self, column_names: List[str], table_name: str, unique_key: str) -> dict:
@@ -333,7 +333,7 @@ class DatabaseService:
             dict: Result with status and SQL to execute
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {"status": "error", "message": "Database client not initialized"}
         
         try:
@@ -373,7 +373,7 @@ class DatabaseService:
             }
             
         except Exception as e:
-            logger.error(f"Error creating table from columns: {e}")
+            logger.error(f"❌ Error creating table from columns: {e}")
             return {"status": "error", "message": str(e)}
 
     def execute_sql_query(self, sql_query: str) -> dict:
@@ -387,7 +387,7 @@ class DatabaseService:
             dict: Result with status and details
         """
         if not self.client:
-            logger.error("WARNING: Supabase client not initialized.")
+            logger.error("❌ WARNING: Supabase client not initialized.")
             return {"status": "error", "message": "Database client not initialized"}
         
         try:
@@ -411,7 +411,7 @@ class DatabaseService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error executing SQL query: {e}")
+            logger.error(f"❌ Error executing SQL query: {e}")
             # If RPC method doesn't exist, provide alternative
             if "function execute_sql" in str(e).lower():
                 return {

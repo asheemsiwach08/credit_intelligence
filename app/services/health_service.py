@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import time
+import pytz
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -31,7 +32,7 @@ class HealthService:
         """Basic liveness check - just confirms the process is running."""
         return {
             "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat(),
             "process_id": os.getpid(),
             "uptime_seconds": time.time() - psutil.Process().create_time()
         }
@@ -51,20 +52,20 @@ class HealthService:
         
         return {
             "status": overall_status,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat(),
             "checks": checks
         }
     
     async def get_app_info(self) -> Dict[str, Any]:
         """Get application version, git SHA, and build information."""
         return {
-            "app_name": "Credit Intelligence API",
-            "version": "1.0.0",
+            "app_name": settings.API_TITLE,
+            "version": settings.API_VERSION,
             "git_sha": self._get_git_sha(),
             "build_time": self._get_build_time(),
             "python_version": f"{psutil.sys.version_info.major}.{psutil.sys.version_info.minor}.{psutil.sys.version_info.micro}",
             "environment": os.getenv("ENV", "development"),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
         }
     
     async def _check_database(self) -> Dict[str, Any]:
@@ -98,7 +99,7 @@ class HealthService:
             }
             
         except Exception as e:
-            self.logger.error(f"Database health check failed: {e}")
+            self.logger.error(f"❌ Database health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"Database connection failed: {str(e)}",
@@ -130,7 +131,7 @@ class HealthService:
             }
             
         except Exception as e:
-            self.logger.error(f"OpenAI health check failed: {e}")
+            self.logger.error(f"❌ OpenAI health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"OpenAI API connection failed: {str(e)}",
@@ -179,7 +180,7 @@ class HealthService:
                 "response_time_ms": 0
             }
         except Exception as e:
-            self.logger.error(f"S3 health check failed: {e}")
+            self.logger.error(f"❌ S3 health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"S3 connection failed: {str(e)}",
@@ -224,7 +225,7 @@ class HealthService:
             }
             
         except Exception as e:
-            self.logger.error(f"System resource check failed: {e}")
+            self.logger.error(f"❌ System resource check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"System resource check failed: {str(e)}"
