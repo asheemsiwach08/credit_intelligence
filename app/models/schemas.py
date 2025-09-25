@@ -157,18 +157,32 @@ class IOCLExtractSchema(BaseModel):
     output: List[IOCLOutputData]
 
 ########################## Lenders Gemini Search Response ###################################
+class InterestRange(BaseModel):
+    min_interest_rate: float
+    max_interest_rate: float
+
+class LoanTenureRange(BaseModel):
+    min_loan_tenure_in_years: int
+    max_loan_tenure_in_years: int
+
+class LoanAmountRange(BaseModel):
+    min_loan_amount: int
+    max_loan_amount: int    
+
 class LendersGeminiSearchResponse(BaseModel):
     lender_name: str
-    interest_rate_range: str
-    loan_to_value: str
+    home_loan_interest_rate_range: InterestRange
+    loan_against_property_interest_rate_range: InterestRange
+    home_loan_to_value: str
+    loan_against_property_loan_to_value: str
     minimum_credit_score: int
-    minimum_loan_amount: int
-    maximum_loan_amount: int
-    # loan_amount_range: str
-    loan_tenure_range: str
+    loan_amount_range: LoanAmountRange
+    loan_tenure_range: LoanTenureRange
     loan_approval_time: str
     processing_fees: str
+    processing_time: str
     special_offers_available: str
+
 
 
 

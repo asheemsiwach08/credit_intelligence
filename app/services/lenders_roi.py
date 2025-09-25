@@ -34,17 +34,17 @@ class ScrapeLendersROI:
 
         #LROI 2:Search Scraper Prompt
         search_scraper_prompt = f"""What is the 
-                1. interest rate, 
-                2. Loan-to-value, 
-                3. minimum credit score, 
-                4. loan amount range, 
-                5. loan tenure range, 
-                6. approval time, 
-                7. processing fee, 
-                8. special Offers
-                for home loan in India for {lender_name} effective from {datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%B, %Y")}."""
+                1. home loan interest rate,
+                2. Loan-against-property interest rate, 
+                3. Loan-to-value, 
+                4. minimum credit score, 
+                5. loan amount range, 
+                6. loan tenure range, 
+                7. approval time, 
+                8. processing fee and processing time, 
+                9. special Offers
+                for home loan in India for {lender_name} effective on {datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%B, %Y")}."""
         logger.info(f"Searching for {lender_name} ROI from Google")
-        # breakpoint()
 
         #LROI 3.1:Search Google
         try:
@@ -82,11 +82,41 @@ class ScrapeLendersROI:
                 #LROI 3.5:Reformat the response based on the keys in the response format
                 structured_response["id"] = lender_id
                 structured_response["lender_name"] = lender_name
-                structured_response["home_loan_roi"] = structured_response.pop("interest_rate_range")
-                structured_response["lap_roi"] = structured_response.pop("loan_to_value")
+                
+                # -------------------------------------------- Key Changes ----------------------------------------- #
+                # 1. Changed the key "interest_rate_range" to "home_loan_roi"
+                min_interes_rate = structured_response.get("home_loan_interest_rate_range", {}).get("min_interest_rate", 0)
+                max_interes_rate = structured_response.get("home_loan_interest_rate_range", {}).get("max_interest_rate", 0)
+                structured_response["home_loan_roi"] = f"{min_interes_rate}% - {max_interes_rate}%"
+                structured_response.pop("home_loan_interest_rate_range")
+
+                # 2. Changed the key "loan_against_property_interest_rate_range" to "lap_roi"
+                min_lap_rate = structured_response.get("loan_against_property_interest_rate_range", {}).get("min_interest_rate", 0)
+                max_lap_rate = structured_response.get("loan_against_property_interest_rate_range", {}).get("max_interest_rate", 0)
+                structured_response["lap_roi"] = f"{min_lap_rate}% - {max_lap_rate}%"
+                structured_response.pop("loan_against_property_interest_rate_range")
+
+                # 3. Changed the key "home_loan_to_value" to "home_loan_ltv"
+                structured_response["home_loan_ltv"] = structured_response.pop("home_loan_to_value")
+
+                # 4. Changed the key "loan_against_property_loan_to_value" to "lap_ltv"
+                structured_response["lap_ltv"] = structured_response.pop("loan_against_property_loan_to_value")
+
+                # 5. Changed the key "loan_tenure_range" to "loan_tenure"
+                min_loan_tenure = structured_response.get("loan_tenure_range", {}).get("min_loan_tenure_in_years", 0)
+                max_loan_tenure = structured_response.get("loan_tenure_range", {}).get("max_loan_tenure_in_years", 0)
+                structured_response["loan_tenure_range"] = f"{min_loan_tenure} to {max_loan_tenure} years"
+
+                # 6. Changed the key "loan_amount_range" to "loan_amount"
+                structured_response["minimum_loan_amount"] = structured_response.get("loan_amount_range", {}).get("min_loan_amount", 0)
+                structured_response["maximum_loan_amount"] = structured_response.get("loan_amount_range", {}).get("max_loan_amount", 0)
+                structured_response.pop("loan_amount_range")
+
+                # 7. Changed the key "updated_at" to "updated_at"
                 structured_response["updated_at"] = datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S")
+                # -------------------------------------------- Key Changes ----------------------------------------- #
                 logger.info(f"✅ Structured response created successfully")
-                # breakpoint()
+
             except Exception as e:
                 logger.error(f"Error reformatting structured response: {e}")
                 return {"message": "Error reformatting structured response", "status_code": 500}
@@ -95,7 +125,6 @@ class ScrapeLendersROI:
         try:
             database_response = database_service.save_unique_data(data=structured_response, table_name=table_name, update_if_exists=True)
             # logger.info(f"Database response: {database_response}")
-            # breakpoint()
             return {"message": f"Data scraped & {database_response['status']} - {database_response['message']}", "status_code": 200}
         except Exception as e:
             logger.error(f"Error saving structured response: {e}")

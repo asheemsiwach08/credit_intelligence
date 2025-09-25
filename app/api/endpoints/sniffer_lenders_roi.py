@@ -55,6 +55,35 @@ def process_lenders_parallel(lenders_data, table_name, max_concurrent=5):
     
     return results
 
+###########################################################################################################
+                              # Testing API for Scraping Lenders ROI #
+###########################################################################################################
+from pydantic import BaseModel
+
+class LendersRoiTestRequest(BaseModel):
+    lender_data: dict
+    table_name: str
+
+@router.post("/lenders_roi_test")
+def lenders_roi_test(request: LendersRoiTestRequest):
+
+    lender_data = request.lender_data
+    table_name = request.table_name
+
+    try:
+        result = process_single_lender(lender_data, table_name)
+        return {
+            "message": "Lenders ROI test completed",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"❌ Error in testing API for Scraping Lenders ROI: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+###########################################################################################################
+                               #  Main API for Scraping Lenders ROI #
+###########################################################################################################
+
 #Method to scrape lenders ROI
 @router.post("/lenders_roi")
 def scrape_lenders_roi(request: SnifferLendersRoiRequest):
@@ -68,7 +97,7 @@ def scrape_lenders_roi(request: SnifferLendersRoiRequest):
 
     # Extract the lender name from the database
     try:
-        lenders_sql_response = database_service.run_sql(query=f"Select id, lender_name from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day'")
+        lenders_sql_response = database_service.run_sql(query=f"Select id, lender_name from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 5")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}")
         raise HTTPException(status_code=500, detail=str(e))
