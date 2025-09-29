@@ -1,0 +1,164 @@
+import logging
+from typing import Optional
+from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from fastapi import APIRouter, HTTPException
+from app.services.database_service import database_service
+from app.services.property_price_service import property_price_service
+
+logger = logging.getLogger(__name__)
+
+# Initializing the router
+router = APIRouter(prefix="/ai", tags=["property price"])
+
+# -------------------------------------------------------------------------------------------------------- #
+                                    # Pydantic Models #
+# -------------------------------------------------------------------------------------------------------- #
+
+
+class PropertyPricesRequest(BaseModel):
+    table_name: Optional[str] = "approved_projects"
+    interval: Optional[int] = 1
+
+class PropertyPricesResponse(BaseModel):
+    message: str
+    successful: int
+    failed: int
+    results: list
+
+class PropertyPriceResponse(BaseModel):
+    status: str
+    project_name: str
+    message: str
+
+class PropertyPriceRequest(BaseModel):
+    id: Optional[str] = None
+    project_name: str
+    city: Optional[str] = None
+    table_name: Optional[str] = "approved_projects"
+
+# -------------------------------------------------------------------------------------------------------- #
+                               # Parallel Processing Functions #
+# -------------------------------------------------------------------------------------------------------- #
+
+#Method to process a single property 
+def process_single_project(property_detail):
+    """Process a single property - wrapper for thread execution"""
+
+    property_id = str(property_detail.get("id",""))
+    property_name = str(property_detail.get("project_name",""))
+    property_location = str(property_detail.get("city",""))
+    table_name = str(property_detail.get("table_name", "approved_projects"))
+
+    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}")
+
+    try:
+        logger.info(f"Processing project: {property_name}")
+        result = property_price_service.find_property_price(
+            property_id=property_id, 
+            property_name=property_name, 
+            property_location=property_location, 
+            table_name=table_name
+        )
+
+        logger.info(f"✅ Completed processing property: {property_name}")
+        return {"status": "success", "property_name": property_name, "message": result.get("message")}
+    except Exception as e:
+        logger.error(f"❌ Error processing property {property_name} for location {property_location}: {e}")
+        return {"status": "error", "property_name": property_name, "message": str(e)}
+
+
+#Method to process properties in parallel
+def process_properties_parallel(property_details, max_concurrent=5):
+    """Process properties in parallel with limited concurrency"""
+    results = []
+    
+    with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+        # Submit all tasks
+        future_to_property = {
+            executor.submit(process_single_project, property): property
+            for property in property_details
+        }
+        
+        # Process completed tasks
+        for future in as_completed(future_to_property):
+            property = future_to_property[future]
+            try:
+                result = future.result()
+                results.append(result)
+                logger.info(f"✅ Completed {len(results)}/{len(property_details)} properties")
+            except Exception as e:
+                logger.error(f"❌ Error in parallel processing for {property.get('property_name', 'Unknown')}: {e}")
+                results.append({"status": "error", "property_name": property.get('property_name', 'Unknown'), "message": str(e)})
+    
+    return results
+
+
+###########################################################################################################
+                               #  API for Getting Property Price #
+###########################################################################################################
+
+@router.post("/property_price", response_model=PropertyPriceResponse)
+def get_property_price(request: PropertyPriceRequest):
+
+    # Validate the request
+    if not request.project_name:
+        logger.error("❌ Project name is required. Please check the project name")
+        raise HTTPException(status_code=400, detail="Project name is required. Please check the project name")
+    if not request.city:
+        logger.error("❌ City is required. Please check the city")
+        raise HTTPException(status_code=400, detail="City is required. Please check the city")
+
+    logger.info(f"Property price request: {request.id}, {request.project_name}, {request.city}")
+
+    result = process_single_project(dict(request))
+
+    return PropertyPriceResponse(
+        status=result.get("status"),
+        project_name=request.project_name,
+        message=result.get("message")
+    )
+
+# -------------------------------------------------------------------------------------------------------- #
+                                # API to get Multiple Property Prices #
+# -------------------------------------------------------------------------------------------------------- #
+@router.post("/property_prices",response_model=PropertyPricesResponse)
+def get_property_prices(request: PropertyPricesRequest):
+
+    # Validate the request
+    if not request.table_name:
+        logger.error("❌ Table name is required. Please check the table name")
+        raise HTTPException(status_code=400, detail="Table name is required. Please check the table name")
+
+    logger.info(f"Approved Projects Price request: {request}")
+
+    # Extract the project name and city from the database
+    try:
+        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 5")
+    except Exception as e:
+        logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}. Please check the table name, and columns along with the interval.")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not projects_sql_response["data"]:
+        logger.debug(f"❌ No data found from {request.table_name} table in database for the selected interval. Please check the interval and table name")
+        raise HTTPException(status_code=404, detail=f"No data found from {request.table_name} table in database for the selected interval. Please check the interval and table name")
+    else:
+        approved_projects_data = projects_sql_response["data"]
+        logger.info(f"✅ Found {len(approved_projects_data)} projects to process")
+   
+     # Process lenders in parallel with limited concurrency
+    results = process_properties_parallel(approved_projects_data, max_concurrent=5)
+    
+    # Summary of results
+    successful = len([r for r in results if r["status"] == "success"])
+    failed = len([r for r in results if r["status"] == "error"])
+    
+    logger.info(f"✅ Processing completed: {successful} successful, {failed} failed")
+    
+    return PropertyPricesResponse(
+        message=f"Processed {len(approved_projects_data)} projects",
+        successful=successful,
+        failed=failed,
+        results=results
+    )
