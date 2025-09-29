@@ -7,7 +7,6 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from fastapi import UploadFile, File, Form, HTTPException
-from app.api import router
 from app.services.credit_intelligence_agent import CreditReportGenerator, DataPersister, load_input
 from app.utils.data_utils import calculate_recent_payments_by_lender, generate_file_name
 from app.utils.error_handling import PDFReadError, BadURLError, OpenAITimeout, ValidationError
