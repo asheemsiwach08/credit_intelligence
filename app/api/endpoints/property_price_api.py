@@ -1,5 +1,6 @@
+import uuid
 import logging
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -31,6 +32,7 @@ class PropertyPriceResponse(BaseModel):
     status: str
     project_name: str
     message: str
+    data: List[dict]
 
 class PropertyPriceRequest(BaseModel):
     id: Optional[str] = None
@@ -46,27 +48,57 @@ class PropertyPriceRequest(BaseModel):
 def process_single_project(property_detail):
     """Process a single property - wrapper for thread execution"""
 
-    property_id = str(property_detail.get("id",""))
-    property_name = str(property_detail.get("project_name",""))
-    property_location = str(property_detail.get("city",""))
-    table_name = str(property_detail.get("table_name", "approved_projects"))
+    property_id = property_detail.get("id",None)
+    property_name = property_detail.get("project_name","")
+    property_location = property_detail.get("city","")
+    table_name = property_detail.get("table_name", "approved_projects")
 
-    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}")
+    new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
+    # if new_record:
+    #     property_id = str(uuid.uuid4()) 
+    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}")
 
+    # Finding the Property Price and other details
     try:
         logger.info(f"Processing project: {property_name}")
-        result = property_price_service.find_property_price(
+        find_property_price_result = property_price_service.find_property_price(
             property_id=property_id, 
             property_name=property_name, 
             property_location=property_location, 
-            table_name=table_name
+            # table_name=table_name
         )
-
-        logger.info(f"✅ Completed processing property: {property_name}")
-        return {"status": "success", "property_name": property_name, "message": result.get("message")}
+        find_property_data = find_property_price_result.get("data",None)
+        if not find_property_data.get("property_found"):
+            logger.info(f"No record found for the mentioned property. Please check the property name and location.")
+            return {"status": "success", "property_name": property_name, "message": "No record found for the mentioned property. Please check the property name and location."}
     except Exception as e:
         logger.error(f"❌ Error processing property {property_name} for location {property_location}: {e}")
         return {"status": "error", "property_name": property_name, "message": str(e)}
+
+    # Updating Records to the Database
+    try:
+        generated_data_to_save = find_property_price_result.get("data",{})
+        # logger.info(f"Generated data to save: {generated_data_to_save}")
+
+        data_to_save = property_price_service.generate_data_to_save(data_to_update=generated_data_to_save, new_record=new_record)
+        db_response = property_price_service.updating_records_to_db(data_to_save=data_to_save, new_record=new_record)
+        
+        logger.info(f"✅ Completed processing property: {property_name}")
+
+        data_for_ui = []
+        for property in generated_data_to_save.get("properties",[]):
+            data_for_ui.append({
+            "property_name": property.get("project_name",""), 
+            "lenders_count": len(property.get("lenders",[])),
+            "lenders_names": property.get("lenders",[]),
+            "builder_name": property.get("builder_name",""), 
+            "city": property.get("city","")
+            })
+        return {"status": "success", "property_name": property_name, "message": db_response.get("message"), "data": data_for_ui}
+    except Exception as e:
+        logger.error(f"❌ Error generating data to save for property {property_name} for location {property_location}: {e}")
+        return {"status": "error", "property_name": property_name, "message": str(e)}
+
 
 
 #Method to process properties in parallel
@@ -106,9 +138,9 @@ def get_property_price(request: PropertyPriceRequest):
     if not request.project_name:
         logger.error("❌ Project name is required. Please check the project name")
         raise HTTPException(status_code=400, detail="Project name is required. Please check the project name")
-    if not request.city:
-        logger.error("❌ City is required. Please check the city")
-        raise HTTPException(status_code=400, detail="City is required. Please check the city")
+    # if not request.city:
+    #     logger.error("❌ City is required. Please check the city")
+    #     raise HTTPException(status_code=400, detail="City is required. Please check the city")
 
     logger.info(f"Property price request: {request.id}, {request.project_name}, {request.city}")
 
@@ -117,7 +149,8 @@ def get_property_price(request: PropertyPriceRequest):
     return PropertyPriceResponse(
         status=result.get("status"),
         project_name=request.project_name,
-        message=result.get("message")
+        message=result.get("message"),
+        data=result.get("data",[])
     )
 
 # -------------------------------------------------------------------------------------------------------- #
