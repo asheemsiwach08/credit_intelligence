@@ -54,8 +54,6 @@ def process_single_project(property_detail):
     table_name = property_detail.get("table_name", "approved_projects")
 
     new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
-    # if new_record:
-    #     property_id = str(uuid.uuid4()) 
     logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}")
 
     # Finding the Property Price and other details
@@ -64,7 +62,8 @@ def process_single_project(property_detail):
         find_property_price_result = property_price_service.find_property_price(
             property_id=property_id, 
             property_name=property_name, 
-            property_location=property_location, 
+            property_location=property_location,
+            new_record=new_record,
             # table_name=table_name
         )
         find_property_data = find_property_price_result.get("data",None)
@@ -86,14 +85,18 @@ def process_single_project(property_detail):
         logger.info(f"✅ Completed processing property: {property_name}")
 
         data_for_ui = []
-        for property in generated_data_to_save.get("properties",[]):
-            data_for_ui.append({
-            "property_name": property.get("project_name",""), 
-            "lenders_count": len(property.get("lenders",[])),
-            "lenders_names": property.get("lenders",[]),
-            "builder_name": property.get("builder_name",""), 
-            "city": property.get("city","")
-            })
+        if new_record:
+            for property in generated_data_to_save.get("properties",[]):
+                data_for_ui.append({
+                "property_name": property.get("project_name",""), 
+                "lenders_count": len(property.get("lenders",[])),
+                "lenders_names": property.get("lenders",[]),
+                "builder_name": property.get("builder_name",""), 
+                "city": property.get("city","")
+                })
+        else:
+            data_for_ui = []
+
         return {"status": "success", "property_name": property_name, "message": db_response.get("message"), "data": data_for_ui}
     except Exception as e:
         logger.error(f"❌ Error generating data to save for property {property_name} for location {property_location}: {e}")
@@ -168,7 +171,7 @@ def get_property_prices(request: PropertyPricesRequest):
 
     # Extract the project name and city from the database
     try:
-        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 5")
+        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} limit 10") # where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 5")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}. Please check the table name, and columns along with the interval.")
         raise HTTPException(status_code=500, detail=str(e))
