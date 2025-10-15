@@ -199,7 +199,7 @@ class PropertyPriceService:
                 "6) Include source URL if present; else empty string.\n"
                 "7) If multiple similar properties, include unique ones.\n"
             )
-            self.set_model_response(model_output)
+            # self.set_model_response(model_output)
             openai_structured = self.openai_analyzer.get_structured_response(
                 system_message=system_message,
                 prompt=search_response_data,
