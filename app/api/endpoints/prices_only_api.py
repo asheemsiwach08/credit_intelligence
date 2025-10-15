@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["property price"])
 
 # ----------------------- CONFIG -----------------------
-DATABASE_URL = os.getenv("DATABASE_URL")
 ALLOWED_TABLES = {"approved_projects"}  # allow-list for safety
 
 ALLOWED_SOURCES = {"google", "nobroker", "magicbricks", "99acres", "housing"}
@@ -77,9 +76,23 @@ class BulkPriceUpdateResponse(BaseModel):
 
 # ----------------------- DB HELPERS -----------------------
 def _conn():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL not set")
-    return psycopg2.connect(DATABASE_URL)
+    host = os.getenv("POSTGRES_HOST")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "")
+    db = os.getenv("POSTGRES_DB", "postgres")
+
+    if not host:
+        raise RuntimeError("POSTGRES_HOST is required")
+
+    # If you need SSL in prod, add: options={"sslmode": "require"}
+    return psycopg2.connect(
+        host=host,
+        port=port,
+        dbname=db,
+        user=user,
+        password=password,
+    )
 
 def _validate_table(name: str) -> str:
     if name not in ALLOWED_TABLES:
