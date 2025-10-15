@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 # --- DB (psycopg2) ---
 import psycopg2
-from psycopg2.extras import dict_row
+from psycopg2.extras import RealDictCursor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["property price"])
@@ -27,7 +27,7 @@ SRC_TO_COL = {
     "housing":     "housing_price",
 }
 
-# ---------- Optional: try to use your existing Gemini pipeline if available ----------
+# ---------- Optional: reuse your Gemini pipeline if present ----------
 USE_GEMINI_PIPELINE = True
 _property_price_service = None
 if USE_GEMINI_PIPELINE:
@@ -57,7 +57,7 @@ class PriceOnlyResponse(BaseModel):
 def _conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg2.connect(DATABASE_URL, row_factory=dict_row)
+    return psycopg2.connect(DATABASE_URL)
 
 def _validate_table(name: str) -> str:
     if name not in ALLOWED_TABLES:
@@ -74,7 +74,7 @@ def _resolve_project_id(table: str, project_name: Optional[str], city: Optional[
       order by updated_at desc nulls last
       limit 1
     """
-    with _conn() as con, con.cursor() as cur:
+    with _conn() as con, con.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(sql, (project_name, city))
         row = cur.fetchone()
         if not row:
@@ -95,7 +95,7 @@ def _update_prices_row(table: str, row_id: str, updates: Dict[str, Any]) -> Dict
             raise HTTPException(status_code=404, detail="Target row not found for update.")
     return {"status": "success", "message": f"Updated {len(cols)} column(s)."}
 
-# ---------- Price fetchers ----------
+# ---------- Price extraction helpers ----------
 def _price_text_from(d: Any) -> Optional[str]:
     """Normalize various shapes into a single text like '45 L – 60 L'."""
     if d is None:
@@ -137,10 +137,10 @@ def _extract_from_pipeline(project_id: str, project_name: str, city: str, source
 
     for src in sources:
         text = None
-        # structured location first
+        # structured first
         if src in prices:
             text = _price_text_from(prices.get(src))
-        # fallbacks for flattened keys
+        # fallbacks to flattened keys
         if not text:
             for k in (f"{src}_price", f"{src}_min", f"{src}_max", src):
                 if k in p0 and p0[k]:
@@ -161,13 +161,13 @@ def update_prices_only(req: PriceOnlyRequest):
     if not srcs:
         raise HTTPException(status_code=400, detail=f"sources must be subset of {sorted(ALLOWED_SOURCES)}")
 
-    # resolve target
+    # resolve target row
     if req.id:
         target = {"id": req.id, "project_name": req.project_name or ""}
     else:
         target = _resolve_project_id(table, req.project_name, req.city)
 
-    # fetch prices via pipeline (Gemini) or raise 501 if not wired
+    # fetch prices from pipeline (Gemini) or 501 if not wired
     col_values = _extract_from_pipeline(
         project_id=target["id"],
         project_name=target.get("project_name", "") or (req.project_name or ""),
@@ -177,12 +177,12 @@ def update_prices_only(req: PriceOnlyRequest):
     if not col_values:
         raise HTTPException(status_code=404, detail="No price data returned by pipeline for requested sources.")
 
-    # timestamps (only refresh these)
+    # timestamps on refresh
     now = datetime.now()
     col_values["last_scraped_at"] = now
     col_values["updated_at"] = now
 
-    # perform partial update
+    # partial update
     resp = _update_prices_row(table, target["id"], col_values)
     updated_cols = sorted(col_values.keys())
 
