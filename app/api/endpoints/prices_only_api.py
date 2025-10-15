@@ -7,9 +7,9 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-# --- DB (psycopg3) ---
-import psycopg
-from psycopg.rows import dict_row
+# --- DB (psycopg2) ---
+import psycopg2
+from psycopg2.extras import dict_row
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["property price"])
@@ -57,7 +57,7 @@ class PriceOnlyResponse(BaseModel):
 def _conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    return psycopg2.connect(DATABASE_URL, row_factory=dict_row)
 
 def _validate_table(name: str) -> str:
     if name not in ALLOWED_TABLES:
