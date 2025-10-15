@@ -122,50 +122,90 @@ class PropertyPriceService:
             "google":      f"what is the latest price for {pn}, {pl} or similar properties on google, share only the price range",
         }
 
+        # def one(qitem):
+        #     platform, q = qitem
+        #     try:
+        #         res = self.gemini_service.search_google(q, model=self.gemini_model)
+                
+        #         # Check if quota exhausted
+        #         if res.get("status") == "quota_exhausted":
+        #             logger.error(f"❌ {platform.title()} search failed: Quota exhausted")
+        #             return platform, {"success": False, "error": "Quota exhausted", "quota_exhausted": True}
+                
+        #         if res.get("success"):
+        #             logger.info(f"✅ {platform.title()} search completed")
+        #         else:
+        #             logger.warning(f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')}")
+                
+        #         return platform, res
+        #     except Exception as e:
+        #         logger.error(f"❌ {platform.title()} search failed: {e}")
+        #         return platform, {"success": False, "error": str(e)}
+
         def one(qitem):
+            """
+            Fire a single Gemini query with a per-platform quota bucket and robust retries.
+            Returns: (platform: str, result: dict)
+            """
             platform, q = qitem
             try:
-                res = self.gemini_service.search_google(q, model=self.gemini_model)
-                
-                # Check if quota exhausted
-                if res.get("status") == "quota_exhausted":
-                    logger.error(f"❌ {platform.title()} search failed: Quota exhausted")
-                    return platform, {"success": False, "error": "Quota exhausted", "quota_exhausted": True}
-                
+                # Partition quota per source so concurrent calls don't share the same rate bucket.
+                res = self.gemini_service.search_google(
+                    q,
+                    model=self.gemini_model,
+                    quota_user=platform,   # <- key: isolates RPM/TPM per platform
+                    max_retries=7          # obeys Retry-After internally + jittered backoff
+                )
+
+                http_code = res.get("http_code")
+                if http_code == 429 or res.get("status") == "quota_exhausted":
+                    logger.error(f"❌ {platform.title()} search failed: Quota exhausted (429)")
+                    return platform, {
+                        "success": False,
+                        "error": "Quota exhausted",
+                        "quota_exhausted": True,
+                        "http_code": http_code,
+                    }
+
                 if res.get("success"):
-                    logger.info(f"✅ {platform.title()} search completed")
+                    tok = (res.get("token_usage", {}) or {}).get("totalTokenCount")
+                    logger.info(f"✅ {platform.title()} search completed (tokens={tok})")
                 else:
-                    logger.warning(f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')}")
-                
+                    logger.warning(
+                        f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')} "
+                        f"(code={http_code})"
+                    )
+
                 return platform, res
+
             except Exception as e:
                 logger.error(f"❌ {platform.title()} search failed: {e}")
                 return platform, {"success": False, "error": str(e)}
 
-        results: Dict[str, Any] = {}
-        # Use configurable concurrent workers to avoid hitting rate limits
-        with ThreadPoolExecutor(max_workers=settings.GEMINI_MAX_WORKERS) as ex:
-            fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
-            for f in as_completed(fut):
-                try:
-                    platform, result = f.result()
-                    results[platform] = result
-                    
-                    # Add small delay between requests to respect rate limits
-                    time.sleep(0.5)
-                    
-                except Exception as e:
-                    platform = fut[f]
-                    logger.error(f"❌ Error collecting {platform} search: {e}")
-                    results[platform] = {"success": False, "error": str(e)}
-        # Check if quota was exhausted for any platform
-        quota_exhausted_count = sum(1 for r in results.values() if r.get("quota_exhausted"))
-        
-        if quota_exhausted_count > 0:
-            logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms. Consider reducing API usage or requesting quota increase.")
-        
-        logger.info(f"✅ Parallel search completed for {len(results)} platforms")
-        return results
+                results: Dict[str, Any] = {}
+                # Use configurable concurrent workers to avoid hitting rate limits
+                with ThreadPoolExecutor(max_workers=settings.GEMINI_MAX_WORKERS) as ex:
+                    fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
+                    for f in as_completed(fut):
+                        try:
+                            platform, result = f.result()
+                            results[platform] = result
+                            
+                            # Add small delay between requests to respect rate limits
+                            time.sleep(0.5)
+                            
+                        except Exception as e:
+                            platform = fut[f]
+                            logger.error(f"❌ Error collecting {platform} search: {e}")
+                            results[platform] = {"success": False, "error": str(e)}
+                # Check if quota was exhausted for any platform
+                quota_exhausted_count = sum(1 for r in results.values() if r.get("quota_exhausted"))
+                
+                if quota_exhausted_count > 0:
+                    logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms. Consider reducing API usage or requesting quota increase.")
+                
+                logger.info(f"✅ Parallel search completed for {len(results)} platforms")
+                return results
 
     # ---------- main: find_property_price ----------
     def find_property_price(
