@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from app.services.property_price_service import property_price_service
 
 # --- DB (psycopg2) ---
 import psycopg2
