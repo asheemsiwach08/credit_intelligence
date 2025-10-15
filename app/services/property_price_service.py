@@ -1,6 +1,7 @@
 # app/services/property_price_service.py
 import uuid
 import logging
+import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -119,31 +120,50 @@ class PropertyPriceService:
             "99acres":     f"what is the latest price for {pn}, {pl} or similar properties on 99acres, share only the price range",
             "housing":     f"what is the latest price for {pn}, {pl} or similar properties on housing.com, share only the price range",
             "google":      f"what is the latest price for {pn}, {pl} or similar properties on google, share only the price range",
-            "apf":         f"what is the approved project finance status of {pn}, {pl} just the status and lenders",
-            "lenders":     f"what are the lenders/banks providing pre-approved loan on {pn}, {pl} (not factual). Provide full names.",
         }
 
         def one(qitem):
             platform, q = qitem
             try:
                 res = self.gemini_service.search_google(q, model=self.gemini_model)
-                logger.info(f"✅ {platform.title()} search completed")
+                
+                # Check if quota exhausted
+                if res.get("status") == "quota_exhausted":
+                    logger.error(f"❌ {platform.title()} search failed: Quota exhausted")
+                    return platform, {"success": False, "error": "Quota exhausted", "quota_exhausted": True}
+                
+                if res.get("success"):
+                    logger.info(f"✅ {platform.title()} search completed")
+                else:
+                    logger.warning(f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')}")
+                
                 return platform, res
             except Exception as e:
                 logger.error(f"❌ {platform.title()} search failed: {e}")
                 return platform, {"success": False, "error": str(e)}
 
         results: Dict[str, Any] = {}
-        with ThreadPoolExecutor(max_workers=5) as ex:
+        # Use configurable concurrent workers to avoid hitting rate limits
+        with ThreadPoolExecutor(max_workers=settings.GEMINI_MAX_WORKERS) as ex:
             fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
             for f in as_completed(fut):
                 try:
                     platform, result = f.result()
                     results[platform] = result
+                    
+                    # Add small delay between requests to respect rate limits
+                    time.sleep(0.5)
+                    
                 except Exception as e:
                     platform = fut[f]
                     logger.error(f"❌ Error collecting {platform} search: {e}")
                     results[platform] = {"success": False, "error": str(e)}
+        # Check if quota was exhausted for any platform
+        quota_exhausted_count = sum(1 for r in results.values() if r.get("quota_exhausted"))
+        
+        if quota_exhausted_count > 0:
+            logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms. Consider reducing API usage or requesting quota increase.")
+        
         logger.info(f"✅ Parallel search completed for {len(results)} platforms")
         return results
 

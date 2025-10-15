@@ -52,6 +52,8 @@ class Settings:
     # Gemini API Key
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_SEARCH_MODEL = os.getenv("GEMINI_SEARCH_MODEL", "gemini-2.0-flash")  # Gemini Search Model
+    GEMINI_MAX_WORKERS = int(os.getenv("GEMINI_MAX_WORKERS", "2"))  # Reduce concurrent workers to avoid rate limits
+    GEMINI_RETRY_ATTEMPTS = int(os.getenv("GEMINI_RETRY_ATTEMPTS", "3"))  # Number of retry attempts for quota errors
 
 
 

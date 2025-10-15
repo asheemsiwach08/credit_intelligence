@@ -1,4 +1,6 @@
 import logging
+import time
+import random
 from google import genai
 from google.genai import types
 from openai import OpenAI
@@ -149,13 +151,51 @@ class GeminiService:
 
         logger.info("✅ Gemini service initialized successfully")
 
-    def search_google(self,prompt, model:str = "gemini-2.0-flash"):
-        """Generate a search response using Gemini"""
-        response = self.client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=self.config,
-            )
+    def search_google(self, prompt, model: str = "gemini-2.0-flash", max_retries: int = None):
+        """Generate a search response using Gemini with retry logic"""
+        
+        if max_retries is None:
+            max_retries = settings.GEMINI_RETRY_ATTEMPTS
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=self.config,
+                )
+                break  # Success, exit retry loop
+                
+            except Exception as e:
+                error_str = str(e)
+                
+                # Check if it's a quota/rate limit error
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+                    if attempt < max_retries - 1:  # Don't sleep on last attempt
+                        # Exponential backoff with jitter
+                        wait_time = (2 ** attempt) + random.uniform(0, 1)
+                        logger.warning(f"⚠️ Quota exhausted, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"❌ Quota exhausted after {max_retries} attempts: {e}")
+                        return {
+                            "success": False,
+                            "data": None,
+                            "status": "quota_exhausted",
+                            "token_usage": {"prompt_token": 0, "completion_token": 0, "output_token": 0, "total_token": 0},
+                            "error": f"Quota exhausted: {error_str}"
+                        }
+                else:
+                    # Non-quota error, don't retry
+                    logger.error(f"❌ Non-quota error: {e}")
+                    return {
+                        "success": False,
+                        "data": None,
+                        "status": "error",
+                        "token_usage": {"prompt_token": 0, "completion_token": 0, "output_token": 0, "total_token": 0},
+                        "error": str(e)
+                    }
         
         if response.candidates:
             try:
