@@ -79,7 +79,7 @@ class PropertyPriceService:
 
     # ---------- search + fuzzy ----------
     def set_model_response(self, model_response_schema: Optional[BaseModel] = None):
-        self.gemini_service.set_model_response(model_response_schema)
+        pass
 
     def fuzzy_find(self, query: str, choices, limit=5, score_cutoff=60):
         return process.extract(query, choices, scorer=fuzz.WRatio, limit=limit, score_cutoff=score_cutoff)
