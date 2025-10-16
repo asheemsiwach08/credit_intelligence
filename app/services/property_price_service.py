@@ -122,39 +122,14 @@ class PropertyPriceService:
             "google":      f"what is the latest price for {pn}, {pl} or similar properties on google, share only the price range",
         }
 
-        # def one(qitem):
-        #     platform, q = qitem
-        #     try:
-        #         res = self.gemini_service.search_google(q, model=self.gemini_model)
-                
-        #         # Check if quota exhausted
-        #         if res.get("status") == "quota_exhausted":
-        #             logger.error(f"❌ {platform.title()} search failed: Quota exhausted")
-        #             return platform, {"success": False, "error": "Quota exhausted", "quota_exhausted": True}
-                
-        #         if res.get("success"):
-        #             logger.info(f"✅ {platform.title()} search completed")
-        #         else:
-        #             logger.warning(f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')}")
-                
-        #         return platform, res
-        #     except Exception as e:
-        #         logger.error(f"❌ {platform.title()} search failed: {e}")
-        #         return platform, {"success": False, "error": str(e)}
-
         def one(qitem):
-            """
-            Fire a single Gemini query with a per-platform quota bucket and robust retries.
-            Returns: (platform: str, result: dict)
-            """
             platform, q = qitem
             try:
-                # Partition quota per source so concurrent calls don't share the same rate bucket.
                 res = self.gemini_service.search_google(
                     q,
                     model=self.gemini_model,
-                    quota_user=platform,   # <- key: isolates RPM/TPM per platform
-                    max_retries=7          # obeys Retry-After internally + jittered backoff
+                    quota_user=platform,   # partition rate bucket
+                    max_retries=7
                 )
 
                 http_code = res.get("http_code")
@@ -175,37 +150,40 @@ class PropertyPriceService:
                         f"⚠️ {platform.title()} search failed: {res.get('error', 'Unknown error')} "
                         f"(code={http_code})"
                     )
-
                 return platform, res
 
             except Exception as e:
                 logger.error(f"❌ {platform.title()} search failed: {e}")
                 return platform, {"success": False, "error": str(e)}
 
-                results: Dict[str, Any] = {}
-                # Use configurable concurrent workers to avoid hitting rate limits
-                with ThreadPoolExecutor(max_workers=settings.GEMINI_MAX_WORKERS) as ex:
-                    fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
-                    for f in as_completed(fut):
-                        try:
-                            platform, result = f.result()
-                            results[platform] = result
-                            
-                            # Add small delay between requests to respect rate limits
-                            time.sleep(0.5)
-                            
-                        except Exception as e:
-                            platform = fut[f]
-                            logger.error(f"❌ Error collecting {platform} search: {e}")
-                            results[platform] = {"success": False, "error": str(e)}
-                # Check if quota was exhausted for any platform
-                quota_exhausted_count = sum(1 for r in results.values() if r.get("quota_exhausted"))
-                
-                if quota_exhausted_count > 0:
-                    logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms. Consider reducing API usage or requesting quota increase.")
-                
-                logger.info(f"✅ Parallel search completed for {len(results)} platforms")
-                return results
+        results: Dict[str, Any] = {}
+
+        # Always return a dict — even if something crashes below
+        try:
+            workers = min(max(1, settings.GEMINI_MAX_WORKERS), 3)  # fence bursts
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
+                for f in as_completed(fut):
+                    platform = fut[f]
+                    try:
+                        p, result = f.result()
+                        results[p] = result
+                        time.sleep(0.25)  # light pacing
+                    except Exception as e:
+                        logger.error(f"❌ Error collecting {platform} search: {e}")
+                        results[platform] = {"success": False, "error": str(e)}
+        except Exception as e:
+            # Defensive: never return None
+            logger.error(f"❌ Fatal error in gemini_search_query: {e}")
+
+        quota_exhausted_count = sum(1 for r in results.values() if isinstance(r, dict) and r.get("quota_exhausted"))
+        if quota_exhausted_count > 0:
+            logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms.")
+
+        logger.info(f"✅ Parallel search completed for {len(results)} platforms")
+        return results  # <- guaranteed dict
+
+
 
     # ---------- main: find_property_price ----------
     def find_property_price(
@@ -234,13 +212,25 @@ class PropertyPriceService:
             logger.error(f"❌ Gemini search error: {e}")
             return {"message": "Gemini search failed", "success": False, "data": None}
 
+        # >>> NEW: defensive guards
+        if not isinstance(search_response, dict):
+            logger.error(f"❌ Unexpected search_response type: {type(search_response)}")
+            return {"message": "Gemini search returned invalid response", "success": False, "data": None}
+
+        if not search_response:
+            logger.error("❌ Gemini search returned empty results")
+            return {"message": "No platform results", "success": False, "data": None}
+
         # 4) Flatten the search results into a single plain prompt for OpenAI
         try:
             buf = []
             for platform, result in search_response.items():
-                if isinstance(result, dict) and result.get("success"):
+                if isinstance(result, dict) and result.get("success") and result.get("data"):
                     buf.append(f"{platform.title()}: {result.get('data')}")
             search_response_data = "\n".join(buf).strip()
+            if not search_response_data:
+                logger.error("❌ No successful platform responses to aggregate")
+                return {"message": "No successful platform responses", "success": False, "data": None}
         except Exception as e:
             logger.error(f"❌ Error restructuring Gemini results: {e}")
             return {"message": "Aggregation error", "success": False, "data": None}
