@@ -101,7 +101,8 @@ def process_single_project(property_detail):
                 "lenders_count": len(property.get("lenders",[])),
                 "lenders_names": property.get("lenders",[]),
                 "builder_name": property.get("builder_name",""), 
-                "city": property.get("city","")
+                "city": property.get("city",""),
+                "lenders_id": db_response.get("lenders_id",[])
                 })
         else:
             data_for_ui = []

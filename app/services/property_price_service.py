@@ -431,6 +431,7 @@ class PropertyPriceService:
         try:
             successfull_records = 0
             failed_records = 0
+            lenders_ids = []
             if new_record:  # save lenders data only if the record is new
                 approved_projects_lenders_data = data_to_save.get("approved_projects_lenders")
                 logger.info(f"Processing {len(approved_projects_lenders_data)} property groups for lenders data")
@@ -444,6 +445,7 @@ class PropertyPriceService:
                                 approved_projects_lenders_response = database_service.save_data(data=lender_record, table_name="approved_projects_lenders")
                                 if approved_projects_lenders_response:
                                     successfull_records += 1
+                                    lenders_ids.append(lender_record.get('lender_id'))
                                     logger.info(f"✅ Saved lender {lender_record.get('lender_id')} for project {lender_record.get('project_id')}")
                                 else:
                                     failed_records += 1
@@ -457,10 +459,10 @@ class PropertyPriceService:
             
         except Exception as e:
             logger.error(f"❌ Failed to save Approved Projects Lenders Table: {e}")
-            return {"message": f"Failed to save Approved Projects Lenders Table: {e}", "success": False, "successfull_records": 0, "failed_records": 0}
+            return {"message": f"Failed to save Approved Projects Lenders Table: {e}", "success": False, "successfull_records": 0, "failed_records": 0, "lenders_ids": []}
         
         # Return success response after all operations
-        return {"message": f"Data saved to the database successfully", "success": True, "successfull_records": successfull_records, "failed_records": failed_records}
+        return {"message": f"Data saved to the database successfully", "success": True, "successfull_records": successfull_records, "failed_records": failed_records, "lenders_id": lenders_ids}
 
 
 property_price_service = PropertyPriceService()
