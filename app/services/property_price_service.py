@@ -55,8 +55,14 @@ class PropertyPriceService:
 
     def __init__(self):
         """Initializing the Property Price Service"""
-        self.gemini_model = settings.GEMINI_SEARCH_MODEL
+        
+        # Models
+        # self.gemini_model = settings.GEMINI_SEARCH_MODEL
+        self.gemini_single_search_model = settings.GEMINI_SINGLE_SEARCH_MODEL
+        self.gemini_multi_search_model = settings.GEMINI_MULTI_SEARCH_MODEL 
         self.openai_model = settings.SNIFFER_ROI_OPENAI_MODEL
+
+        # Services
         self.gemini_service = GeminiService()
         self.openai_analyzer = OpenAIAnalyzer()
 
@@ -121,8 +127,13 @@ class PropertyPriceService:
             logger.error(f"❌ Error fetching all lenders from the database: {e}")
             return []
 
-    def gemini_search_query(self, property_name: str, property_location: str) -> dict:
+    def gemini_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute parallel Gemini searches for property price data"""
+
+        if search_type == "single":
+            gemini_model = self.gemini_single_search_model
+        else:
+            gemini_model = self.gemini_multi_search_model
         
         # Define all search queries
         queries = {
@@ -139,7 +150,8 @@ class PropertyPriceService:
             """Execute a single search query"""
             platform, query = platform_query
             try:
-                result = self.gemini_service.search_google(query, model=self.gemini_model)
+                result = self.gemini_service.search_google(query, model=gemini_model)
+
                 logger.info(f"✅ {platform.title()} search completed")
                 return platform, result
             except Exception as e:
@@ -173,6 +185,7 @@ class PropertyPriceService:
                         self,
                         property_name: str,
                         new_record: bool,
+                        search_type: str = "single",
                         property_id: Optional[str] = None,
                         property_location: Optional[str] = None):
         """Finding the property price based on the property name and location"""
@@ -218,7 +231,7 @@ class PropertyPriceService:
         #     return {"message": "Error getting property price", "success": False}
 
         try:
-             search_response = self.gemini_search_query(property_name, property_location)
+             search_response = self.gemini_search_query(property_name, property_location, search_type)
             #  print("Gemini Search Response: ",search_response,"....|||")
 
         except Exception as e:

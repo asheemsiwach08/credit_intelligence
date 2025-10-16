@@ -1,3 +1,4 @@
+
 import uuid
 import logging
 from typing import Optional, List
@@ -39,6 +40,7 @@ class PropertyPriceRequest(BaseModel):
     project_name: str
     city: Optional[str] = None
     table_name: Optional[str] = "approved_projects"
+    search_type: Optional[str] = "single"  # "single", "multi", or "auto" (auto-detect)
 
 # -------------------------------------------------------------------------------------------------------- #
                                # Parallel Processing Functions #
@@ -52,18 +54,25 @@ def process_single_project(property_detail):
     property_name = property_detail.get("project_name","")
     property_location = property_detail.get("city","")
     table_name = property_detail.get("table_name", "approved_projects")
+    search_type = property_detail.get("search_type", "single")
 
     new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
-    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}")
+    
+    # Set search type based on use case (auto-detect or use provided)
+    if search_type == "auto":
+        search_type = "single" if new_record else "multi"  # Single for new properties, multi for updates
+    
+    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}, search_type={search_type}")
 
     # Finding the Property Price and other details
     try:
-        logger.info(f"Processing project: {property_name}")
+        logger.info(f"Processing project: {property_name} with {search_type} search")
         find_property_price_result = property_price_service.find_property_price(
             property_id=property_id, 
             property_name=property_name, 
             property_location=property_location,
             new_record=new_record,
+            search_type=search_type,
             # table_name=table_name
         )
         find_property_data = find_property_price_result.get("data",None)
@@ -171,7 +180,7 @@ def get_property_prices(request: PropertyPricesRequest):
 
     # Extract the project name and city from the database
     try:
-        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 100")
+        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 1")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}. Please check the table name, and columns along with the interval.")
         raise HTTPException(status_code=500, detail=str(e))
