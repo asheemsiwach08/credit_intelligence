@@ -19,3 +19,4 @@ supabase==2.20.0
 supabase_auth==2.20.0
 supabase_functions==2.20.0
 rapidfuzz==3.9.7
+requests

@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 from app.config.settings import settings
+import requests
 
 logger = logging.getLogger(__name__)
 
