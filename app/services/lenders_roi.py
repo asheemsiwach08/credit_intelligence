@@ -30,7 +30,7 @@ class ScrapeLendersROI:
             logger.info("Lender ID is missing, generating a new one")
             lender_id = str(uuid.uuid4())
         if not lender_name:
-            return {"message": "Lender name is required", "status_code": 400}
+            return {"message": "Lender name is required", "success": False}
 
         #LROI 2:Search Scraper Prompt
         search_scraper_prompt = f"""What is the 
@@ -51,12 +51,12 @@ class ScrapeLendersROI:
             first_tool_response = self.gemini_service.search_google(search_scraper_prompt, model=self.gemini_model)
         except Exception as e:
             logger.error(f"Error searching google: {e}")
-            return {"message": "Error searching google", "status_code": 500}
+            return {"message": "Error searching google", "success": False}
 
         #LROI 3.2:Check if the search response is not None
         if not first_tool_response:
             logger.error(f"Error searching google: {first_tool_response['error']}")
-            return {"message": "Error searching google", "status_code": 500}
+            return {"message": "Error searching google", "success": False}
         else:
             search_response = first_tool_response["data"]
 
@@ -71,12 +71,12 @@ class ScrapeLendersROI:
                 structured_response = openai_structured_response["data"]
             except Exception as e:
                 logger.error(f"Error extracting structured response: {e}")
-                return {"message": "Error extracting structured response", "status_code": 500}
+                return {"message": "Error extracting structured response", "success": False}
 
         #LROI 3.4:Check if the structured response is not None
         if not structured_response:
             logger.error(f"Error extracting structured response: {openai_structured_response['error']}")
-            return {"message": "Error extracting structured response", "status_code": 500}
+            return {"message": "Error extracting structured response", "success": False}  
         else:
             try:
                 #LROI 3.5:Reformat the response based on the keys in the response format
@@ -119,15 +119,15 @@ class ScrapeLendersROI:
 
             except Exception as e:
                 logger.error(f"Error reformatting structured response: {e}")
-                return {"message": "Error reformatting structured response", "status_code": 500}
+                return {"message": "Error reformatting structured response", "success": False}
 
         #LROI 4:Save the structured response to the database
         try:
             database_response = database_service.save_unique_data(data=structured_response, table_name=table_name, update_if_exists=True)
             # logger.info(f"Database response: {database_response}")
-            return {"message": f"Data scraped & {database_response['status']} - {database_response['message']}", "status_code": 200}
+            return {"message": f"Data scraped & {database_response['status']} - {database_response['message']}", "success": True}
         except Exception as e:
             logger.error(f"Error saving structured response: {e}")
-            return {"message": f"Error saving structured response: {e}", "status_code": 500}
+            return {"message": f"Error saving structured response: {e}", "success": False}
 
 scrapelendersroi = ScrapeLendersROI()

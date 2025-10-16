@@ -1,4 +1,6 @@
 import logging
+from typing import Optional
+from pydantic import BaseModel
 from google import genai
 from google.genai import types
 from openai import OpenAI
@@ -142,12 +144,30 @@ class GeminiService:
             google_search=types.GoogleSearch()
         )
 
-        # Configure generation settings
         self.config = types.GenerateContentConfig(
             tools=[self.grounding_tool]
-        )
+            )
 
         logger.info("✅ Gemini service initialized successfully")
+
+
+
+    # # Configure generation settings
+    # def set_model_response(self, model_response_schema:Optional[BaseModel] = None):
+
+    #     if model_response_schema:
+    #         config = types.GenerateContentConfigDict(
+    #         response_mime_type="application/json",
+    #         response_schema=model_response_schema,
+    #         tools=[self.grounding_tool]
+    #         )
+    #         return config
+    #     else:
+    #         config = types.GenerateContentConfig(
+    #         tools=[self.grounding_tool]
+    #         )
+    #         return config
+
 
     def search_google(self,prompt, model:str = "gemini-2.0-flash"):
         """Generate a search response using Gemini"""
@@ -156,32 +176,26 @@ class GeminiService:
                 contents=prompt,
                 config=self.config,
             )
-        
+
         if response.candidates:
             try:
+                all_data = ""
                 for part in response.candidates[0].content.parts:
                     if part.text is not None:
-                        return {
-                                "success": True,
-                                "data":part.text,
-                                "status":"completed",
-                                "token_usage":{
-                                    "prompt_token":response.usage_metadata.prompt_token_count,
-                                    "completion_token":response.usage_metadata.candidates_token_count, 
-                                    "output_token":0, 
-                                    "total_token":response.usage_metadata.total_token_count
-                                    },
-                                "error": None
-                            }
+                        all_data += part.text
+                return {
+                            "success": True,
+                            "data":all_data,
+                            "status":"completed",
+                            "token_usage":{
+                                "prompt_token":response.usage_metadata.prompt_token_count,
+                                "completion_token":response.usage_metadata.candidates_token_count, 
+                                "output_token":0, 
+                                "total_token":response.usage_metadata.total_token_count
+                                },
+                            "error": None
+                        }
                         
-                else:
-                    return {
-                        "success": False,
-                        "data": None,
-                        "status":"completed",
-                        "token_usage":{"prompt_token":0,"completion_token":0, "output_token":0, "total_token":0},
-                        "error": None
-                    }
             except Exception as e:
                 logger.error(f"Error searching Google: {e}")
                 return {
