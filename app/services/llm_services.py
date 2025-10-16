@@ -111,15 +111,15 @@ class OpenAIAnalyzer:
                 "error": None,
             }
 
-    except Exception as e:
-        logger.error(f"❌ OpenAI structured output error: {e}")
-        return {
-            "success": False,
-            "data": None,
-            "status": "error",
-            "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-            "error": str(e),
-        }
+        except Exception as e:
+            logger.error(f"❌ OpenAI structured output error: {e}")
+            return {
+                "success": False,
+                "data": None,
+                "status": "error",
+                "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                "error": str(e),
+            }
 
 
     def structured_output(self, prompt, model: str = None, response_format=None):
