@@ -54,9 +54,9 @@ class OpenAIAnalyzer:
         
     # Function to send a prompt to GPT model for extracting data
     def get_structured_response(self, system_message, prompt, model: str = None, response_format=None):
-    """
-    Compatible with openai>=1.99.0 — uses Responses API for structured JSON output.
-    """
+        """
+        Compatible with openai>=1.99.0 — uses Responses API for structured JSON output.
+        """
         try:
             if not model:
                 model = self.model
