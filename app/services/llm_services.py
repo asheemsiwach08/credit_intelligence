@@ -54,37 +54,58 @@ class OpenAIAnalyzer:
         
     # Function to send a prompt to GPT model for extracting data
     def get_structured_response(self, system_message, prompt, model: str = None, response_format=None):
+    """
+    Compatible with openai>=1.99.0 — uses Responses API for structured JSON output.
+    """
         try:
-            response = self.client.beta.chat.completions.parse(
+            if not model:
+                model = self.model
+
+            # If you passed a Pydantic schema, convert it to dict
+            if hasattr(response_format, "model_json_schema"):
+                schema = response_format.model_json_schema()
+            elif isinstance(response_format, dict):
+                schema = response_format
+            else:
+                schema = {"type": "object"}
+
+            response = self.client.responses.create(
                 model=model,
-                messages=[
+                input=[
                     {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                temperature=0,  # creativity
-                response_format=response_format
+                response_format={"type": "json_schema", "json_schema": {"name": "structured_output", "schema": schema}},
+                temperature=0,
             )
-            
+
+            if not response.output or not response.output[0].content:
+                raise ValueError("No structured content returned")
+
+            content = response.output[0].content[0].text
             return {
-                    "success": True,
-                    "data":response.choices[0].message.parsed.model_dump(),
-                    "status":"Not defined",
-                    "token_usage":{
-                        "prompt_token":response.usage.prompt_tokens,
-                        "completion_token":response.usage.completion_tokens, 
-                        "output_token":0, 
-                        "total_token":response.usage.total_tokens
-                        },
-                    "error": None
-                }
+                "success": True,
+                "data": content,
+                "status": response.status,
+                "token_usage": {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                "error": None,
+            }
+
         except Exception as e:
+            logger.error(f"❌ OpenAI structured output error: {e}")
             return {
-                    "success": False,
-                    "data":None,
-                    "status":"Error",
-                    "token_usage":{"prompt_token":0,"completion_token":0, "output_token":0, "total_token":0},
-                    "error": str(e)
-                }
+                "success": False,
+                "data": None,
+                "status": "error",
+                "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                "error": str(e),
+            }
+
+
 
     def structured_output(self, prompt, model: str = None, response_format=None):
         try:
