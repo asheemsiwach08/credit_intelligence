@@ -1,6 +1,5 @@
-
-import uuid
 import logging
+from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -78,6 +77,11 @@ def process_single_project(property_detail):
         find_property_data = find_property_price_result.get("data",None)
         if not find_property_data.get("property_found"):
             logger.info(f"No record found for the mentioned property. Please check the property name and location.")
+
+            # If no record found, then update the record with the current date and time
+            data_to_save = {"approved_projects": {"id": property_id, "project_name": property_name, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "last_scraped_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}}
+            property_price_service.updating_records_to_db(data_to_save=data_to_save, new_record=False)  # Save the update record to database
+            
             return {"status": "success", "property_name": property_name, "message": "No record found for the mentioned property. Please check the property name and location."}
     except Exception as e:
         logger.error(f"❌ Error processing property {property_name} for location {property_location}: {e}")
@@ -101,7 +105,8 @@ def process_single_project(property_detail):
                 "lenders_count": len(property.get("lenders",[])),
                 "lenders_names": property.get("lenders",[]),
                 "builder_name": property.get("builder_name",""), 
-                "city": property.get("city","")
+                "city": property.get("city",""),
+                "lenders_ids": db_response.get("lenders_ids",[])
                 })
         else:
             data_for_ui = []
