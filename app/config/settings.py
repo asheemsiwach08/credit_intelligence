@@ -49,9 +49,17 @@ class Settings:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-    # Gemini API Key
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_SEARCH_MODEL = os.getenv("GEMINI_SEARCH_MODEL", "gemini-2.0-flash")  # Gemini Search Model
+    # Gemini API Keys (Multiple)
+    GEMINI_SINGLE_API_KEY = os.getenv("GEMINI_SINGLE_API_KEY")  # For single property searches
+    GEMINI_MULTI_API_KEY = os.getenv("GEMINI_MULTI_API_KEY")    # For multi property searches
+    
+    # Gemini Models
+    GEMINI_SINGLE_SEARCH_MODEL = os.getenv("GEMINI_SINGLE_SEARCH_MODEL", "gemini-2.5-flash")  # Powerful model
+    GEMINI_MULTI_SEARCH_MODEL = os.getenv("GEMINI_MULTI_SEARCH_MODEL", "gemini-2.0-flash")    # Faster model
+    
+    # Fallback (backward compatibility)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", GEMINI_SINGLE_API_KEY)
+    GEMINI_SEARCH_MODEL = os.getenv("GEMINI_SEARCH_MODEL", "gemini-2.0-flash")
 
 
 

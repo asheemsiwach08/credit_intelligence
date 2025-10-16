@@ -127,17 +127,35 @@ class GeminiService:
     """Service for handling Google Gemini AI interactions"""
 
     def __init__(self):
-        """Initialize Gemini service with API key"""
-        self.api_key = settings.GEMINI_API_KEY
-        if not self.api_key:
-            logger.error("❌ GEMINI_API_KEY not found in environment variables")
-            raise ValueError("GEMINI_API_KEY is required")
+        """Initialize Gemini service with multiple API keys"""
+        # API Keys
+        self.single_api_key = settings.GEMINI_SINGLE_API_KEY
+        self.multi_api_key = settings.GEMINI_MULTI_API_KEY
+        self.fallback_api_key = settings.GEMINI_API_KEY
+        
+        # Models
+        self.gemini_single_search_model = settings.GEMINI_SINGLE_SEARCH_MODEL
+        self.gemini_multi_search_model = settings.GEMINI_MULTI_SEARCH_MODEL
+        
+        # Validate API keys
+        if not (self.single_api_key or self.multi_api_key or self.fallback_api_key):
+            logger.error("❌ No Gemini API keys found in environment variables")
+            raise ValueError("At least one Gemini API key is required")
 
-        # Initialize models
-        self.client = genai.Client(api_key=self.api_key)
-        if not self.client:
-            logger.error("❌ Failed to initialize Gemini client")
-            raise ValueError("Failed to initialize Gemini client")
+        # Initialize clients for both API keys
+        self.single_client = None
+        self.multi_client = None
+        
+        if self.single_api_key:
+            self.single_client = genai.Client(api_key=self.single_api_key)
+        
+        if self.multi_api_key:
+            self.multi_client = genai.Client(api_key=self.multi_api_key)
+        
+        # Fallback client
+        if not self.single_client and not self.multi_client:
+            self.single_client = genai.Client(api_key=self.fallback_api_key)
+            self.multi_client = self.single_client
 
         # Define the grounding tool
         self.grounding_tool = types.Tool(
@@ -169,9 +187,24 @@ class GeminiService:
     #         return config
 
 
-    def search_google(self,prompt, model:str = "gemini-2.0-flash"):
-        """Generate a search response using Gemini"""
-        response = self.client.models.generate_content(
+    def search_google(self, prompt, model: str = None):
+        """Generate a search response using Gemini with appropriate API key"""
+        if not model:
+            model = self.gemini_single_search_model
+
+        # Select the appropriate client based on model type
+        if model == self.gemini_single_search_model and self.single_client:
+            client = self.single_client
+            logger.debug(f"🔑 Using single API key for model: {model}")
+        elif model == self.gemini_multi_search_model and self.multi_client:
+            client = self.multi_client
+            logger.debug(f"🔑 Using multi API key for model: {model}")
+        else:
+            # Fallback to available client
+            client = self.single_client or self.multi_client
+            logger.warning(f"⚠️ Using fallback client for model: {model}")
+
+        response = client.models.generate_content(
                 model=model,
                 contents=prompt,
                 config=self.config,
