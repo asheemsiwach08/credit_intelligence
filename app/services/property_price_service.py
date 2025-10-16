@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class PropertyPriceStructuredResponse(BaseModel):
     # property_found: bool = Field(description="Whether the correctproperty details are found in the data or not")
     project_name: Optional[str] = Field(None,description="The unique name of the property or project user is searching for")
-    property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
+    # property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
     builder_name: Optional[str] = Field(None,description="The name of the builder/developer of the property or project user is searching for")
     lenders: List[str] = Field(description="The list of lenders/banks who are providing home loan for the property")
     city: Optional[str] = Field(None,description="The city of the property or project user is searching for")
@@ -32,7 +32,7 @@ class PropertyPriceStructuredResponse(BaseModel):
 class SinglePropertyPriceStructuredResponse(BaseModel):
     property_found: bool = Field(description="Whether the correctproperty details are found in the data or not")
     project_name: Optional[str] = Field(None,description="The unique name of the property or project user is searching for")
-    property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
+    # property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
     builder_name: Optional[str] = Field(None,description="The name of the builder/developer of the property or project user is searching for")
     lenders: List[str] = Field(description="The list of lenders/banks who are providing home loan for the property")
     city: Optional[str] = Field(None,description="The city of the property or project user is searching for")
