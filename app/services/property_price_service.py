@@ -258,11 +258,13 @@ class PropertyPriceService:
             )
 
             if not openai_structured.get("success"):
-                logger.error("❌ OpenAI structuring failed: %s", openai_structured.get("error"))
-                return {"message": "Structuring failed", "success": False, "data": None}
+                logger.error(f"❌ OpenAI structuring failed: {openai_structured.get('error')}")
+                return {"message": "OpenAI structuring failed", "success": False, "data": None}
 
             structured = openai_structured.get("data")
-
+            if structured is None:
+                logger.error("❌ OpenAI returned no structured data")
+                return {"message": "No structured data returned", "success": False, "data": None}
             # id handling
             if new_record:
                 if structured and isinstance(structured, dict) and "properties" in structured:
