@@ -230,6 +230,11 @@ def _extract_from_pipeline(project_id: str, project_name: str, city: str, source
         elif mn or mx or val2:
             out[SRC_TO_COL[src]] = str(val2 or mn or mx)
 
+    if not out:
+        logger.warning(
+            "No price fields mapped from pipeline — project_id=%s project_name=%s city=%s sources=%s | service_data_keys=%s",
+            project_id, project_name, city, sources, list(flat.keys()) if isinstance(flat, dict) else type(flat)
+        )
     return out
 
 # ----------------------- SINGLE ENDPOINT -----------------------

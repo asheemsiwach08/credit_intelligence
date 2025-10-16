@@ -128,7 +128,7 @@ class PropertyPriceService:
                 res = self.gemini_service.search_google(
                     q,
                     model=self.gemini_model,
-                    quota_user=platform,   # partition rate bucket
+                    quota_user=platform,
                     max_retries=7
                 )
 
@@ -143,7 +143,7 @@ class PropertyPriceService:
                     }
 
                 if res.get("success"):
-                    tok = (res.get("token_usage", {}) or {}).get("totalTokenCount")
+                    tok = (res.get("token_usage", {}) or {}).get("total_token")
                     logger.info(f"✅ {platform.title()} search completed (tokens={tok})")
                 else:
                     logger.warning(
@@ -156,32 +156,32 @@ class PropertyPriceService:
                 logger.error(f"❌ {platform.title()} search failed: {e}")
                 return platform, {"success": False, "error": str(e)}
 
-        results: Dict[str, Any] = {}
+                results: Dict[str, Any] = {}
 
-        # Always return a dict — even if something crashes below
-        try:
-            workers = min(max(1, settings.GEMINI_MAX_WORKERS), 3)  # fence bursts
-            with ThreadPoolExecutor(max_workers=workers) as ex:
-                fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
-                for f in as_completed(fut):
-                    platform = fut[f]
-                    try:
-                        p, result = f.result()
-                        results[p] = result
-                        time.sleep(0.25)  # light pacing
-                    except Exception as e:
-                        logger.error(f"❌ Error collecting {platform} search: {e}")
-                        results[platform] = {"success": False, "error": str(e)}
-        except Exception as e:
-            # Defensive: never return None
-            logger.error(f"❌ Fatal error in gemini_search_query: {e}")
+                # Always return a dict — even if something crashes below
+                try:
+                    workers = min(max(1, settings.GEMINI_MAX_WORKERS), 3)  # fence bursts
+                    with ThreadPoolExecutor(max_workers=workers) as ex:
+                        fut = {ex.submit(one, (k, v)): k for k, v in queries.items()}
+                        for f in as_completed(fut):
+                            platform = fut[f]
+                            try:
+                                p, result = f.result()
+                                results[p] = result
+                                time.sleep(0.25)  # light pacing
+                            except Exception as e:
+                                logger.error(f"❌ Error collecting {platform} search: {e}")
+                                results[platform] = {"success": False, "error": str(e)}
+                except Exception as e:
+                    # Defensive: never return None
+                    logger.error(f"❌ Fatal error in gemini_search_query: {e}")
 
-        quota_exhausted_count = sum(1 for r in results.values() if isinstance(r, dict) and r.get("quota_exhausted"))
-        if quota_exhausted_count > 0:
-            logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms.")
+                quota_exhausted_count = sum(1 for r in results.values() if isinstance(r, dict) and r.get("quota_exhausted"))
+                if quota_exhausted_count > 0:
+                    logger.warning(f"⚠️ Quota exhausted for {quota_exhausted_count} platforms.")
 
-        logger.info(f"✅ Parallel search completed for {len(results)} platforms")
-        return results  # <- guaranteed dict
+                logger.info(f"✅ Parallel search completed for {len(results)} platforms")
+                return results  # <- guaranteed dict
 
 
 
@@ -229,7 +229,7 @@ class PropertyPriceService:
                     buf.append(f"{platform.title()}: {result.get('data')}")
             search_response_data = "\n".join(buf).strip()
             if not search_response_data:
-                logger.error("❌ No successful platform responses to aggregate")
+                logger.error("❌ No successful platform responses to aggregate (all failed or empty data).")
                 return {"message": "No successful platform responses", "success": False, "data": None}
         except Exception as e:
             logger.error(f"❌ Error restructuring Gemini results: {e}")
@@ -256,6 +256,11 @@ class PropertyPriceService:
                 model=self.openai_model,
                 response_format=model_output,
             )
+
+            if not openai_structured.get("success"):
+                logger.error("❌ OpenAI structuring failed: %s", openai_structured.get("error"))
+                return {"message": "Structuring failed", "success": False, "data": None}
+
             structured = openai_structured.get("data")
 
             # id handling
