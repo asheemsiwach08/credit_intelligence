@@ -54,57 +54,72 @@ class OpenAIAnalyzer:
         
     # Function to send a prompt to GPT model for extracting data
     def get_structured_response(self, system_message, prompt, model: str = None, response_format=None):
-        """
-        Compatible with openai>=1.99.0 — uses Responses API for structured JSON output.
-        """
+    """
+    Works with openai>=1.99.0 (Responses API)
+    Always returns parsed JSON if possible.
+    """
+    try:
+        if not model:
+            model = self.model
+
+        # Derive JSON schema from Pydantic model or fallback to generic
+        if hasattr(response_format, "model_json_schema"):
+            schema = response_format.model_json_schema()
+        elif isinstance(response_format, dict):
+            schema = response_format
+        else:
+            schema = {
+                "type": "object",
+                "properties": {"property_found": {"type": "boolean"}},
+                "additionalProperties": True,
+            }
+
+        response = self.client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "StructuredOutput", "schema": schema},
+            },
+            temperature=0,
+        )
+
+        # Extract structured content
+        if not response.output or not response.output[0].content:
+            raise ValueError("No structured content returned")
+
+        text = response.output[0].content[0].text
+        import json
         try:
-            if not model:
-                model = self.model
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning(f"⚠️ Could not parse JSON, returning raw text: {text[:200]}")
+            parsed = {"raw": text}
 
-            # If you passed a Pydantic schema, convert it to dict
-            if hasattr(response_format, "model_json_schema"):
-                schema = response_format.model_json_schema()
-            elif isinstance(response_format, dict):
-                schema = response_format
-            else:
-                schema = {"type": "object"}
+        return {
+            "success": True,
+            "data": parsed,
+            "status": response.status,
+            "token_usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "total_tokens": response.usage.total_tokens,
+            },
+            "error": None,
+        }
 
-            response = self.client.responses.create(
-                model=model,
-                input=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_schema", "json_schema": {"name": "structured_output", "schema": schema}},
-                temperature=0,
-            )
-
-            if not response.output or not response.output[0].content:
-                raise ValueError("No structured content returned")
-
-            content = response.output[0].content[0].text
-            return {
-                "success": True,
-                "data": content,
-                "status": response.status,
-                "token_usage": {
-                    "input_tokens": response.usage.input_tokens,
-                    "output_tokens": response.usage.output_tokens,
-                    "total_tokens": response.usage.total_tokens,
-                },
-                "error": None,
-            }
-
-        except Exception as e:
-            logger.error(f"❌ OpenAI structured output error: {e}")
-            return {
-                "success": False,
-                "data": None,
-                "status": "error",
-                "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-                "error": str(e),
-            }
-
+    except Exception as e:
+        logger.error(f"❌ OpenAI structured output error: {e}")
+        return {
+            "success": False,
+            "data": None,
+            "status": "error",
+            "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+            "error": str(e),
+        }
 
 
     def structured_output(self, prompt, model: str = None, response_format=None):
