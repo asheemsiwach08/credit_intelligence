@@ -40,7 +40,7 @@ class PropertyPriceRequest(BaseModel):
     project_name: str
     city: Optional[str] = None
     table_name: Optional[str] = "approved_projects"
-    search_type: Optional[str] = "single"  # "single", "multi", or "auto" (auto-detect)
+    search_type: Optional[str] = "multi"  # "single", "multi", or "auto" (auto-detect)
 
 # -------------------------------------------------------------------------------------------------------- #
                                # Parallel Processing Functions #
@@ -54,7 +54,7 @@ def process_single_project(property_detail):
     property_name = property_detail.get("project_name","")
     property_location = property_detail.get("city","")
     table_name = property_detail.get("table_name", "approved_projects")
-    search_type = property_detail.get("search_type", "single")
+    search_type = property_detail.get("search_type", "multi")
 
     new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
     
