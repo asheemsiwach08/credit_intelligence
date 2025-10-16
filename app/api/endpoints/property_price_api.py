@@ -171,7 +171,7 @@ def get_property_prices(request: PropertyPricesRequest):
 
     # Extract the project name and city from the database
     try:
-        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day'")
+        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 100")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}. Please check the table name, and columns along with the interval.")
         raise HTTPException(status_code=500, detail=str(e))
