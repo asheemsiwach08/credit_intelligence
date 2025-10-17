@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class PropertyPriceStructuredResponse(BaseModel):
     # property_found: bool = Field(description="Whether the correctproperty details are found in the data or not")
     project_name: Optional[str] = Field(None,description="The unique name of the property or project user is searching for")
-    property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
+    # property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
     builder_name: Optional[str] = Field(None,description="The name of the builder/developer of the property or project user is searching for")
     lenders: List[str] = Field(description="The list of lenders/banks who are providing home loan for the property")
     city: Optional[str] = Field(None,description="The city of the property or project user is searching for")
@@ -32,7 +32,7 @@ class PropertyPriceStructuredResponse(BaseModel):
 class SinglePropertyPriceStructuredResponse(BaseModel):
     property_found: bool = Field(description="Whether the correctproperty details are found in the data or not")
     project_name: Optional[str] = Field(None,description="The unique name of the property or project user is searching for")
-    property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
+    # property_type: Optional[str] = Field(None,description="The type of the property or project user is searching for i.e Appartment, Flat, Plot, etc.")
     builder_name: Optional[str] = Field(None,description="The name of the builder/developer of the property or project user is searching for")
     lenders: List[str] = Field(description="The list of lenders/banks who are providing home loan for the property")
     city: Optional[str] = Field(None,description="The city of the property or project user is searching for")
@@ -55,8 +55,14 @@ class PropertyPriceService:
 
     def __init__(self):
         """Initializing the Property Price Service"""
-        self.gemini_model = settings.GEMINI_SEARCH_MODEL
+        
+        # Models
+        # self.gemini_model = settings.GEMINI_SEARCH_MODEL
+        self.gemini_single_search_model = settings.GEMINI_SINGLE_SEARCH_MODEL
+        self.gemini_multi_search_model = settings.GEMINI_MULTI_SEARCH_MODEL 
         self.openai_model = settings.SNIFFER_ROI_OPENAI_MODEL
+
+        # Services
         self.gemini_service = GeminiService()
         self.openai_analyzer = OpenAIAnalyzer()
 
@@ -121,8 +127,13 @@ class PropertyPriceService:
             logger.error(f"❌ Error fetching all lenders from the database: {e}")
             return []
 
-    def gemini_search_query(self, property_name: str, property_location: str) -> dict:
+    def gemini_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute parallel Gemini searches for property price data"""
+
+        if search_type == "single":
+            gemini_model = self.gemini_single_search_model
+        else:
+            gemini_model = self.gemini_multi_search_model
         
         # Define all search queries
         queries = {
@@ -139,7 +150,8 @@ class PropertyPriceService:
             """Execute a single search query"""
             platform, query = platform_query
             try:
-                result = self.gemini_service.search_google(query, model=self.gemini_model)
+                result = self.gemini_service.search_google(query, model=gemini_model)
+
                 logger.info(f"✅ {platform.title()} search completed")
                 return platform, result
             except Exception as e:
@@ -173,6 +185,7 @@ class PropertyPriceService:
                         self,
                         property_name: str,
                         new_record: bool,
+                        search_type: str = "single",
                         property_id: Optional[str] = None,
                         property_location: Optional[str] = None):
         """Finding the property price based on the property name and location"""
@@ -218,7 +231,7 @@ class PropertyPriceService:
         #     return {"message": "Error getting property price", "success": False}
 
         try:
-             search_response = self.gemini_search_query(property_name, property_location)
+             search_response = self.gemini_search_query(property_name, property_location, search_type)
             #  print("Gemini Search Response: ",search_response,"....|||")
 
         except Exception as e:
@@ -418,6 +431,7 @@ class PropertyPriceService:
         try:
             successfull_records = 0
             failed_records = 0
+            lenders_ids = []
             if new_record:  # save lenders data only if the record is new
                 approved_projects_lenders_data = data_to_save.get("approved_projects_lenders")
                 logger.info(f"Processing {len(approved_projects_lenders_data)} property groups for lenders data")
@@ -431,6 +445,7 @@ class PropertyPriceService:
                                 approved_projects_lenders_response = database_service.save_data(data=lender_record, table_name="approved_projects_lenders")
                                 if approved_projects_lenders_response:
                                     successfull_records += 1
+                                    lenders_ids.append(lender_record.get('lender_id'))
                                     logger.info(f"✅ Saved lender {lender_record.get('lender_id')} for project {lender_record.get('project_id')}")
                                 else:
                                     failed_records += 1
@@ -444,10 +459,10 @@ class PropertyPriceService:
             
         except Exception as e:
             logger.error(f"❌ Failed to save Approved Projects Lenders Table: {e}")
-            return {"message": f"Failed to save Approved Projects Lenders Table: {e}", "success": False, "successfull_records": 0, "failed_records": 0}
+            return {"message": f"Failed to save Approved Projects Lenders Table: {e}", "success": False, "successfull_records": 0, "failed_records": 0, "lenders_ids": []}
         
         # Return success response after all operations
-        return {"message": f"Data saved to the database successfully", "success": True, "successfull_records": successfull_records, "failed_records": failed_records}
+        return {"message": f"Data saved to the database successfully", "success": True, "successfull_records": successfull_records, "failed_records": failed_records, "lenders_id": lenders_ids}
 
 
 property_price_service = PropertyPriceService()

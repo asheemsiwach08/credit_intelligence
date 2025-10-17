@@ -1,5 +1,5 @@
-import uuid
 import logging
+from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,6 +39,7 @@ class PropertyPriceRequest(BaseModel):
     project_name: str
     city: Optional[str] = None
     table_name: Optional[str] = "approved_projects"
+    search_type: Optional[str] = "multi"  # "single", "multi", or "auto" (auto-detect)
 
 # -------------------------------------------------------------------------------------------------------- #
                                # Parallel Processing Functions #
@@ -52,23 +53,35 @@ def process_single_project(property_detail):
     property_name = property_detail.get("project_name","")
     property_location = property_detail.get("city","")
     table_name = property_detail.get("table_name", "approved_projects")
+    search_type = property_detail.get("search_type", "multi")
 
     new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
-    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}")
+    
+    # Set search type based on use case (auto-detect or use provided)
+    if search_type == "auto":
+        search_type = "single" if new_record else "multi"  # Single for new properties, multi for updates
+    
+    logger.info(f"Method Inputs: {property_id}, {property_name}, {property_location}, {table_name}, {new_record}, search_type={search_type}")
 
     # Finding the Property Price and other details
     try:
-        logger.info(f"Processing project: {property_name}")
+        logger.info(f"Processing project: {property_name} with {search_type} search")
         find_property_price_result = property_price_service.find_property_price(
             property_id=property_id, 
             property_name=property_name, 
             property_location=property_location,
             new_record=new_record,
+            search_type=search_type,
             # table_name=table_name
         )
         find_property_data = find_property_price_result.get("data",None)
         if not find_property_data.get("property_found"):
             logger.info(f"No record found for the mentioned property. Please check the property name and location.")
+
+            # If no record found, then update the record with the current date and time
+            data_to_save = {"approved_projects": {"id": property_id, "project_name": property_name, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "last_scraped_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}}
+            property_price_service.updating_records_to_db(data_to_save=data_to_save, new_record=False)  # Save the update record to database
+            
             return {"status": "success", "property_name": property_name, "message": "No record found for the mentioned property. Please check the property name and location."}
     except Exception as e:
         logger.error(f"❌ Error processing property {property_name} for location {property_location}: {e}")
@@ -92,7 +105,8 @@ def process_single_project(property_detail):
                 "lenders_count": len(property.get("lenders",[])),
                 "lenders_names": property.get("lenders",[]),
                 "builder_name": property.get("builder_name",""), 
-                "city": property.get("city","")
+                "city": property.get("city",""),
+                "lenders_ids": db_response.get("lenders_ids",[])
                 })
         else:
             data_for_ui = []
@@ -171,7 +185,7 @@ def get_property_prices(request: PropertyPricesRequest):
 
     # Extract the project name and city from the database
     try:
-        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 100")
+        projects_sql_response = database_service.run_sql(query=f"Select id, project_name, city from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 1")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}. Please check the table name, and columns along with the interval.")
         raise HTTPException(status_code=500, detail=str(e))
