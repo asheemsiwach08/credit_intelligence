@@ -127,6 +127,90 @@ class PropertyPriceService:
             logger.error(f"❌ Error fetching all lenders from the database: {e}")
             return []
 
+    def gemini_combined_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
+        """Execute combined Gemini searches for property price data"""
+
+        if search_type == "single":
+            gemini_model = self.gemini_single_search_model
+        elif search_type == "multi":
+            gemini_model = self.gemini_multi_search_model
+        elif search_type == "auto":
+            gemini_model = self.gemini_search_model
+
+        BASE_SEARCH_QUERIES = {
+            "magicbricks": (
+                "what is the latest price for {property}, {location} or similar properties on magicbricks, "
+                "just share the price range and nothing else - no details, only property name and amounts"
+            ),
+            "nobroker": (
+                "what is the latest price for {property}, {location} or similar properties on nobroker, "
+                "just share the price range and nothing else - no details, only property name and amounts"
+            ),
+            "99acres": (
+                "what is the latest price for {property}, {location} or similar properties on 99acres, "
+                "just share the price range and nothing else - no details, only property name and amounts"
+            ),
+            "housing": (
+                "what is the latest price for {property}, {location} or similar properties on housing.com, "
+                "just share the price range and nothing else - no details, only property name and amounts"
+            ),
+            "google": (
+                "what is the latest price for {property}, {location} or similar properties on google, "
+                "just share the price range and nothing else - no details, only property name and amounts"
+            ),
+            "apf": (
+                "what is the approved project finance status of {property}, {location} "
+                "just share the status, and lenders nothing else - no other details"
+            ),
+            "lenders": (
+                "what are the lenders/banks who are providing pre-approved loan on {property}, {location} "
+                "property(not factual).Provide full name of the lender/bank."
+            ),
+        }
+
+        prop, loc = property_name, property_location
+        combined_search_query = "\n".join(
+            f"{i}. {tmpl.format(property=prop, location=loc)}"
+            for i, tmpl in enumerate(BASE_SEARCH_QUERIES.values(), 1)
+        )
+        
+        # Try primary model first, then fallback to alternative model
+        try:
+            logger.info(f"🔄 Attempting search with primary model: {gemini_model}")
+            result = self.gemini_service.search_google(combined_search_query, model=gemini_model)
+            logger.info(f"✅ Search successful with primary model: {gemini_model}")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"❌ Primary model {gemini_model} failed: {e}")
+            
+            # Determine fallback model
+            if gemini_model == self.gemini_single_search_model:
+                fallback_model = self.gemini_multi_search_model
+                logger.info(f"🔄 Switching from single to multi model: {fallback_model}")
+            elif gemini_model == self.gemini_multi_search_model:
+                fallback_model = self.gemini_single_search_model
+                logger.info(f"🔄 Switching from multi to single model: {fallback_model}")
+            else:
+                # If using auto/fallback model, try the single model as backup
+                fallback_model = self.gemini_single_search_model
+                logger.info(f"🔄 Using single model as fallback: {fallback_model}")
+            
+            try:
+                logger.info(f"🔄 Attempting search with fallback model: {fallback_model}")
+                result = self.gemini_service.search_google(combined_search_query, model=fallback_model)
+                logger.info(f"✅ Search successful with fallback model: {fallback_model}")
+                return result
+                
+            except Exception as fallback_error:
+                logger.error(f"❌ Both models failed. Primary: {e}, Fallback: {fallback_error}")
+                return {
+                    "message": f"Both models failed. Primary ({gemini_model}): {str(e)}, Fallback ({fallback_model}): {str(fallback_error)}", 
+                    "success": False,
+                    "primary_error": str(e),
+                    "fallback_error": str(fallback_error)
+                }
+
     def gemini_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute parallel Gemini searches for property price data"""
 
@@ -147,16 +231,40 @@ class PropertyPriceService:
         }
         
         def search_single_platform(platform_query):
-            """Execute a single search query"""
+            """Execute a single search query with model fallback"""
             platform, query = platform_query
+            
+            # Try primary model first
             try:
                 result = self.gemini_service.search_google(query, model=gemini_model)
-
-                logger.info(f"✅ {platform.title()} search completed")
+                logger.info(f"✅ {platform.title()} search completed with primary model: {gemini_model}")
                 return platform, result
+                
             except Exception as e:
-                logger.error(f"❌ {platform.title()} search failed: {e}")
-                return platform, {"success": False, "error": str(e)}
+                logger.warning(f"⚠️ {platform.title()} failed with primary model {gemini_model}: {e}")
+                
+                # Determine fallback model
+                if gemini_model == self.gemini_single_search_model:
+                    fallback_model = self.gemini_multi_search_model
+                elif gemini_model == self.gemini_multi_search_model:
+                    fallback_model = self.gemini_single_search_model
+                else:
+                    fallback_model = self.gemini_single_search_model
+                
+                # Try fallback model
+                try:
+                    result = self.gemini_service.search_google(query, model=fallback_model)
+                    logger.info(f"✅ {platform.title()} search completed with fallback model: {fallback_model}")
+                    return platform, result
+                    
+                except Exception as fallback_error:
+                    logger.error(f"❌ {platform.title()} failed with both models. Primary: {e}, Fallback: {fallback_error}")
+                    return platform, {
+                        "success": False, 
+                        "error": f"Both models failed. Primary: {str(e)}, Fallback: {str(fallback_error)}",
+                        "primary_error": str(e),
+                        "fallback_error": str(fallback_error)
+                    }
         
         # Execute all searches in parallel
         results = {}
@@ -185,6 +293,7 @@ class PropertyPriceService:
                         self,
                         property_name: str,
                         new_record: bool,
+                        combined_search: bool = False,
                         search_type: str = "single",
                         property_id: Optional[str] = None,
                         property_location: Optional[str] = None):
@@ -192,7 +301,7 @@ class PropertyPriceService:
 
         # Fetching all the lenders from the lenders table in the database
         db_lenders_data = self.fetch_all_lenders()
-        db_lenders_list = [lender.get("lender_name") for lender in db_lenders_data]
+        # db_lenders_list = [lender.get("lender_name") for lender in db_lenders_data]
 
         # Setting the model output based on the new record
         if new_record:
@@ -230,10 +339,14 @@ class PropertyPriceService:
         #     logger.error(f"Error getting property price: {e}")
         #     return {"message": "Error getting property price", "success": False}
 
-        try:
-             search_response = self.gemini_search_query(property_name, property_location, search_type)
-            #  print("Gemini Search Response: ",search_response,"....|||")
-
+        try: 
+            if combined_search:
+                logger.info(f"🔄 Executing combined Gemini search query")
+                search_response = self.gemini_combined_search_query(property_name, property_location, search_type)
+            else:
+                logger.info(f"🔄 Executing Gemini search query")
+                search_response = self.gemini_search_query(property_name, property_location, search_type)
+            print("Gemini Search Response: ",search_response,"....|||")
         except Exception as e:
             logger.error(f"Error getting property price: {e}")
             return {"message": "Error getting property price", "success": False}
@@ -241,11 +354,14 @@ class PropertyPriceService:
         # Restructuring the gemini search response for openai structured response
         try:
             search_response_data = ""
-            for platform, result in search_response.items():
-                if result.get("success"):
-                    search_response_data += f"{platform.title()}: {result.get('data')}\n"
-            search_response_data = search_response_data.strip()
-            # print("Search Response Data: ",search_response_data,"....|||")
+            if combined_search:
+                search_response_data = search_response.get("data")
+            else:
+                for platform, result in search_response.items():
+                    if result.get("success"):
+                        search_response_data += f"{platform.title()}: {result.get('data')}\n"
+                search_response_data = search_response_data.strip()
+                # print("Search Response Data: ",search_response_data,"....|||")
         except Exception as e:
             logger.error(f"Error restructuring the gemini search response: {e}")
             return {"message": "Error restructuring the gemini search response", "success": False}
@@ -287,7 +403,7 @@ class PropertyPriceService:
             except Exception as e:
                 logger.error(f"Error updating the property id in the structured response: {e}")
 
-            # print("OpenAI Response: ",structured_response,"....|||")
+            print("OpenAI Response: ",structured_response,"....|||")
             
             return {"message": "Error extracting structured response", "success": False, "data":structured_response}
         except Exception as e:
