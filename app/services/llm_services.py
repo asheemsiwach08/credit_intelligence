@@ -191,17 +191,10 @@ class GeminiService:
         """Generate a search response using Gemini with appropriate API key"""
         if not model:
             model = self.gemini_single_search_model
-
-        # Select the appropriate client based on model type
-        if model == self.gemini_single_search_model and self.single_client:
-            client = self.single_client
-            logger.debug(f"🔑 Using single API key for model: {model}")
-        elif model == self.gemini_multi_search_model and self.multi_client:
+ 
+        client = self.single_client
+        if not client:
             client = self.multi_client
-            logger.debug(f"🔑 Using multi API key for model: {model}")
-        else:
-            # Fallback to available client
-            client = self.single_client or self.multi_client
             logger.warning(f"⚠️ Using fallback client for model: {model}")
 
         response = client.models.generate_content(
@@ -239,6 +232,47 @@ class GeminiService:
                         "error": str(e)
                     }
                 
+    def search_google_multi(self, prompt, model: str = None):
+        """Generate a search response using Gemini with appropriate API key"""
+        if not model:
+            model = self.gemini_multi_search_model
+
+        client = self.multi_client
+        response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=self.config,
+            )
+
+        if response.candidates:
+            try:
+                all_data = ""
+                for part in response.candidates[0].content.parts:
+                    if part.text is not None:
+                        all_data += part.text
+                return {
+                            "success": True,
+                            "data":all_data,
+                            "status":"completed",
+                            "token_usage":{
+                                "prompt_token":response.usage_metadata.prompt_token_count,
+                                "completion_token":response.usage_metadata.candidates_token_count, 
+                                "output_token":0, 
+                                "total_token":response.usage_metadata.total_token_count
+                                },
+                            "error": None
+                        }
+                        
+            except Exception as e:
+                logger.error(f"Error searching Google: {e}")
+                return {
+                        "success": False,
+                        "data": None,
+                        "status":"completed",
+                        "token_usage":{"prompt_token":0,"completion_token":0, "output_token":0, "total_token":0},
+                        "error": str(e)
+                    }
+    
 
 
 openai_analyzer = OpenAIAnalyzer()
