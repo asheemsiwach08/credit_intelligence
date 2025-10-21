@@ -97,7 +97,7 @@ def scrape_lenders_roi(request: SnifferLendersRoiRequest):
 
     # Extract the lender name from the database
     try:
-        lenders_sql_response = database_service.run_sql(query=f"Select id, lender_name from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day'")
+        lenders_sql_response = database_service.run_sql(query=f"Select id, lender_name from {request.table_name} where updated_at <= NOW() - INTERVAL '{request.interval} day' limit 1")
     except Exception as e:
         logger.debug(f"❌ Error extracting data for {request.table_name} table from database: {e}")
         raise HTTPException(status_code=500, detail=str(e))

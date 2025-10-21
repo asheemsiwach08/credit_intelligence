@@ -20,6 +20,7 @@ router = APIRouter(prefix="/ai", tags=["property price"])
 
 class PropertyPricesRequest(BaseModel):
     table_name: Optional[str] = "approved_projects"
+    combined_search: Optional[bool] = False
     interval: Optional[int] = 1
 
 class PropertyPricesResponse(BaseModel):
@@ -40,6 +41,7 @@ class PropertyPriceRequest(BaseModel):
     city: Optional[str] = None
     table_name: Optional[str] = "approved_projects"
     search_type: Optional[str] = "multi"  # "single", "multi", or "auto" (auto-detect)
+    combined_search: Optional[bool] = False
 
 # -------------------------------------------------------------------------------------------------------- #
                                # Parallel Processing Functions #
@@ -54,6 +56,7 @@ def process_single_project(property_detail):
     property_location = property_detail.get("city","")
     table_name = property_detail.get("table_name", "approved_projects")
     search_type = property_detail.get("search_type", "multi")
+    combined_search = property_detail.get("combined_search", False)
 
     new_record = True if not property_id else False  # set the variable for differentiating the new record and the existing record
     
@@ -72,6 +75,7 @@ def process_single_project(property_detail):
             property_location=property_location,
             new_record=new_record,
             search_type=search_type,
+            combined_search=combined_search,
             # table_name=table_name
         )
         find_property_data = find_property_price_result.get("data",None)
