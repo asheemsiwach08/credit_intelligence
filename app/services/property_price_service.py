@@ -130,13 +130,6 @@ class PropertyPriceService:
     def gemini_combined_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute combined Gemini searches for property price data"""
 
-        if search_type == "single":
-            gemini_model = self.gemini_single_search_model
-        elif search_type == "multi":
-            gemini_model = self.gemini_multi_search_model
-        elif search_type == "auto":
-            gemini_model = self.gemini_search_model
-
         BASE_SEARCH_QUERIES = {
             "magicbricks": (
                 "what is the latest price for {property}, {location} or similar properties on magicbricks, "
@@ -177,7 +170,14 @@ class PropertyPriceService:
         # Try primary model first, then fallback to alternative model
         try:
             logger.info(f"🔄 Attempting search with primary model: {gemini_model}")
-            result = self.gemini_service.search_google(combined_search_query, model=gemini_model)
+
+            if search_type == "single":
+                gemini_model = self.gemini_single_search_model
+                result = self.gemini_service.search_google(combined_search_query, model=gemini_model)
+            elif search_type == "multi":
+                gemini_model = self.gemini_multi_search_model
+                result = self.gemini_service.search_google_multi(combined_search_query, model=gemini_model)
+
             logger.info(f"✅ Search successful with primary model: {gemini_model}")
             return result
             
@@ -198,7 +198,7 @@ class PropertyPriceService:
             
             try:
                 logger.info(f"🔄 Attempting search with fallback model: {fallback_model}")
-                result = self.gemini_service.search_google(combined_search_query, model=fallback_model)
+                result = self.gemini_service.search_google_multi(combined_search_query, model=fallback_model)
                 logger.info(f"✅ Search successful with fallback model: {fallback_model}")
                 return result
                 
@@ -213,11 +213,6 @@ class PropertyPriceService:
 
     def gemini_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute parallel Gemini searches for property price data"""
-
-        if search_type == "single":
-            gemini_model = self.gemini_single_search_model
-        else:
-            gemini_model = self.gemini_multi_search_model
         
         # Define all search queries
         queries = {
@@ -236,7 +231,13 @@ class PropertyPriceService:
             
             # Try primary model first
             try:
-                result = self.gemini_service.search_google(query, model=gemini_model)
+                if search_type == "single":
+                    gemini_model = self.gemini_single_search_model
+                    result = self.gemini_service.search_google(query, model=gemini_model)
+                elif search_type == "multi":
+                    gemini_model = self.gemini_multi_search_model
+                    result = self.gemini_service.search_google_multi(query, model=gemini_model)
+
                 logger.info(f"✅ {platform.title()} search completed with primary model: {gemini_model}")
                 return platform, result
                 
@@ -253,7 +254,7 @@ class PropertyPriceService:
                 
                 # Try fallback model
                 try:
-                    result = self.gemini_service.search_google(query, model=fallback_model)
+                    result = self.gemini_service.search_google_multi(query, model=fallback_model)
                     logger.info(f"✅ {platform.title()} search completed with fallback model: {fallback_model}")
                     return platform, result
                     
@@ -300,7 +301,7 @@ class PropertyPriceService:
         """Finding the property price based on the property name and location"""
 
         # Fetching all the lenders from the lenders table in the database
-        db_lenders_data = self.fetch_all_lenders()
+        # db_lenders_data = self.fetch_all_lenders()
         # db_lenders_list = [lender.get("lender_name") for lender in db_lenders_data]
 
         # Setting the model output based on the new record
@@ -310,35 +311,6 @@ class PropertyPriceService:
             model_output = SinglePropertyPriceStructuredResponse
 
 
-        # # GPP -> Gemini Model Call
-        # try:
-        #     search_prompt = """"1.What is the latest property price of %s, %s on magicbricks, nobroker, 99acres, housing.com.
-        #         2. And what is the latest price of this property based on google search.
-        #         3. What are the lenders who are actually providing pre-approved loan on this property(not factual).
-        #         4. Also provide the links of the property on each platform.
-        #         5. You can also provide the builder name of the property or project user is searching for.
-
-        #         Instructions:
-        #         - If there are mutliple properties with same name then return the details of all the properties.  
-        #         - Extract the relevant property price data from each platform individually.
-        #         - If data is missing from a platform, explicitly mark `"price": "Not Found"`.  
-        #         - Always include the link to the source page used. 
-        #         - Check if lenders names are from lenders/banks list, if not then return `"lenders": []`.  
-        #         - Ensure values reflect the *most recent available listings for today*.""" % (property_name, property_location)
-
-        #     response = self.gemini_service.search_google(search_prompt, model=self.gemini_model)
-        #     # print("Gemini Response: ",response,"....|||")
-
-        #     if not response.get("success"):
-        #         logger.error(f"Error getting property price: {response.get('error')}")
-        #         return {"message": response.get('error'), "success": False}
-        #     else:
-        #         search_response = response.get("data")
-
-        # except Exception as e:
-        #     logger.error(f"Error getting property price: {e}")
-        #     return {"message": "Error getting property price", "success": False}
-
         try: 
             if combined_search:
                 logger.info(f"🔄 Executing combined Gemini search query")
@@ -346,7 +318,7 @@ class PropertyPriceService:
             else:
                 logger.info(f"🔄 Executing Gemini search query")
                 search_response = self.gemini_search_query(property_name, property_location, search_type)
-            print("Gemini Search Response: ",search_response,"....|||")
+
         except Exception as e:
             logger.error(f"Error getting property price: {e}")
             return {"message": "Error getting property price", "success": False}
@@ -402,8 +374,6 @@ class PropertyPriceService:
                     structured_response["id"] = property_id
             except Exception as e:
                 logger.error(f"Error updating the property id in the structured response: {e}")
-
-            print("OpenAI Response: ",structured_response,"....|||")
             
             return {"message": "Error extracting structured response", "success": False, "data":structured_response}
         except Exception as e:
