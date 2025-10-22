@@ -57,6 +57,14 @@ class Settings:
     GEMINI_SINGLE_SEARCH_MODEL = os.getenv("GEMINI_SINGLE_SEARCH_MODEL", "gemini-2.5-flash")  # Powerful model
     GEMINI_MULTI_SEARCH_MODEL = os.getenv("GEMINI_MULTI_SEARCH_MODEL", "gemini-2.0-flash")    # Faster model
     
+    # Multi-level Fallback Models for Multi Search (Priority Order)
+    GEMINI_MULTI_FALLBACK_MODELS = [
+        os.getenv("GEMINI_MULTI_FALLBACK_1", "gemini-2.5-flash-lite"),     # Fallback 1: Fast & reliable
+        os.getenv("GEMINI_MULTI_FALLBACK_2", "gemini-2.5-flash-lite-preview-09-2025"),      # Fallback 2: Balanced
+        os.getenv("GEMINI_MULTI_FALLBACK_3", "gemini-2.0-flash-lite"),      # Fallback 3: Stable legacy
+        os.getenv("GEMINI_MULTI_FALLBACK_4", "gemini-2.5-flash")     # Fallback 4: Back to powerful
+    ]
+    
     # Fallback (backward compatibility)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", GEMINI_SINGLE_API_KEY)
     GEMINI_SEARCH_MODEL = os.getenv("GEMINI_SEARCH_MODEL", "gemini-2.0-flash")

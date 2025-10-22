@@ -137,6 +137,9 @@ class GeminiService:
         self.gemini_single_search_model = settings.GEMINI_SINGLE_SEARCH_MODEL
         self.gemini_multi_search_model = settings.GEMINI_MULTI_SEARCH_MODEL
         
+        # Multi-level fallback models for multi search
+        self.gemini_multi_fallback_models = settings.GEMINI_MULTI_FALLBACK_MODELS
+        
         # Validate API keys
         if not (self.single_api_key or self.multi_api_key or self.fallback_api_key):
             logger.error("❌ No Gemini API keys found in environment variables")
