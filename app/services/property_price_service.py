@@ -60,6 +60,7 @@ class PropertyPriceService:
         # self.gemini_model = settings.GEMINI_SEARCH_MODEL
         self.gemini_single_search_model = settings.GEMINI_SINGLE_SEARCH_MODEL
         self.gemini_multi_search_model = settings.GEMINI_MULTI_SEARCH_MODEL 
+        self.gemini_multi_fallback_models = settings.GEMINI_MULTI_FALLBACK_MODELS
         self.openai_model = settings.SNIFFER_ROI_OPENAI_MODEL
 
         # Services
@@ -167,49 +168,64 @@ class PropertyPriceService:
             for i, tmpl in enumerate(BASE_SEARCH_QUERIES.values(), 1)
         )
         
-        # Try primary model first, then fallback to alternative model
-        try:
-            logger.info(f"🔄 Attempting search with primary model: {gemini_model}")
+        # Determine primary model based on search type
+        if search_type == "single":
+            primary_model = self.gemini_single_search_model
+            fallback_models = [self.gemini_multi_search_model]  # Simple fallback for single
+            search_method = self.gemini_service.search_google
+        elif search_type == "multi":
+            primary_model = self.gemini_multi_search_model
+            fallback_models = self.gemini_multi_fallback_models  # Multiple fallbacks for multi
+            search_method = self.gemini_service.search_google_multi
+        else:
+            primary_model = self.gemini_single_search_model
+            fallback_models = [self.gemini_multi_search_model]
+            search_method = self.gemini_service.search_google_multi
 
-            if search_type == "single":
-                gemini_model = self.gemini_single_search_model
-                result = self.gemini_service.search_google(combined_search_query, model=gemini_model)
-            elif search_type == "multi":
-                gemini_model = self.gemini_multi_search_model
-                result = self.gemini_service.search_google_multi(combined_search_query, model=gemini_model)
-
-            logger.info(f"✅ Search successful with primary model: {gemini_model}")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"❌ Primary model {gemini_model} failed: {e}")
-            
-            # Determine fallback model
-            if gemini_model == self.gemini_single_search_model:
-                fallback_model = self.gemini_multi_search_model
-                logger.info(f"🔄 Switching from single to multi model: {fallback_model}")
-            elif gemini_model == self.gemini_multi_search_model:
-                fallback_model = self.gemini_single_search_model
-                logger.info(f"🔄 Switching from multi to single model: {fallback_model}")
-            else:
-                # If using auto/fallback model, try the single model as backup
-                fallback_model = self.gemini_single_search_model
-                logger.info(f"🔄 Using single model as fallback: {fallback_model}")
-            
+        # Create complete model list: primary + fallbacks
+        all_models = [primary_model] + fallback_models
+        errors = []
+        
+        # Try each model in sequence
+        for i, model in enumerate(all_models):
             try:
-                logger.info(f"🔄 Attempting search with fallback model: {fallback_model}")
-                result = self.gemini_service.search_google_multi(combined_search_query, model=fallback_model)
-                logger.info(f"✅ Search successful with fallback model: {fallback_model}")
+                if i == 0:
+                    logger.info(f"🔄 Attempting search with PRIMARY model: {model}")
+                else:
+                    logger.info(f"🔄 Attempting search with FALLBACK {i} model: {model}")
+                
+                result = search_method(combined_search_query, model=model)
+                
+                if i == 0:
+                    logger.info(f"✅ Search successful with PRIMARY model: {model}")
+                else:
+                    logger.info(f"✅ Search successful with FALLBACK {i} model: {model}")
+                
                 return result
                 
-            except Exception as fallback_error:
-                logger.error(f"❌ Both models failed. Primary: {e}, Fallback: {fallback_error}")
-                return {
-                    "message": f"Both models failed. Primary ({gemini_model}): {str(e)}, Fallback ({fallback_model}): {str(fallback_error)}", 
-                    "success": False,
-                    "primary_error": str(e),
-                    "fallback_error": str(fallback_error)
-                }
+            except Exception as e:
+                error_msg = f"Model {model} failed: {str(e)}"
+                errors.append(error_msg)
+                
+                if i == 0:
+                    logger.warning(f"❌ PRIMARY model {model} failed: {e}")
+                else:
+                    logger.warning(f"❌ FALLBACK {i} model {model} failed: {e}")
+                
+                # Continue to next model if available
+                if i < len(all_models) - 1:
+                    logger.info(f"🔄 Trying next fallback model...")
+                    continue
+        
+        # All models failed
+        logger.error(f"❌ ALL MODELS FAILED ({len(all_models)} models attempted)")
+        return {
+            "message": f"All {len(all_models)} models failed. Errors: {'; '.join(errors)}", 
+            "success": False,
+            "models_attempted": all_models,
+            "errors": errors,
+            "total_attempts": len(all_models)
+        }
 
     def gemini_search_query(self, property_name: str, property_location: str, search_type: str = "single") -> dict:
         """Execute parallel Gemini searches for property price data"""
@@ -226,46 +242,66 @@ class PropertyPriceService:
         }
         
         def search_single_platform(platform_query):
-            """Execute a single search query with model fallback"""
+            """Execute a single search query with cascading model fallback"""
             platform, query = platform_query
             
-            # Try primary model first
-            try:
-                if search_type == "single":
-                    gemini_model = self.gemini_single_search_model
-                    result = self.gemini_service.search_google(query, model=gemini_model)
-                elif search_type == "multi":
-                    gemini_model = self.gemini_multi_search_model
-                    result = self.gemini_service.search_google_multi(query, model=gemini_model)
+            # Determine model sequence based on search type
+            if search_type == "single":
+                primary_model = self.gemini_single_search_model
+                fallback_models = [self.gemini_multi_search_model]  # Simple fallback for single
+                search_method = self.gemini_service.search_google
+            elif search_type == "multi":
+                primary_model = self.gemini_multi_search_model
+                fallback_models = self.gemini_multi_fallback_models  # Multiple fallbacks for multi
+                search_method = self.gemini_service.search_google_multi
+            else:
+                primary_model = self.gemini_single_search_model
+                fallback_models = [self.gemini_multi_search_model]
+                search_method = self.gemini_service.search_google_multi
 
-                logger.info(f"✅ {platform.title()} search completed with primary model: {gemini_model}")
-                return platform, result
-                
-            except Exception as e:
-                logger.warning(f"⚠️ {platform.title()} failed with primary model {gemini_model}: {e}")
-                
-                # Determine fallback model
-                if gemini_model == self.gemini_single_search_model:
-                    fallback_model = self.gemini_multi_search_model
-                elif gemini_model == self.gemini_multi_search_model:
-                    fallback_model = self.gemini_single_search_model
-                else:
-                    fallback_model = self.gemini_single_search_model
-                
-                # Try fallback model
+            # Create complete model list: primary + fallbacks
+            all_models = [primary_model] + fallback_models
+            errors = []
+            
+            # Try each model in sequence for this platform
+            for i, model in enumerate(all_models):
                 try:
-                    result = self.gemini_service.search_google_multi(query, model=fallback_model)
-                    logger.info(f"✅ {platform.title()} search completed with fallback model: {fallback_model}")
+                    if i == 0:
+                        logger.debug(f"🔄 {platform.title()}: Trying PRIMARY model {model}")
+                    else:
+                        logger.debug(f"🔄 {platform.title()}: Trying FALLBACK {i} model {model}")
+                    
+                    result = search_method(query, model=model)
+                    
+                    if i == 0:
+                        logger.info(f"✅ {platform.title()} search completed with PRIMARY model: {model}")
+                    else:
+                        logger.info(f"✅ {platform.title()} search completed with FALLBACK {i} model: {model}")
+                    
                     return platform, result
                     
-                except Exception as fallback_error:
-                    logger.error(f"❌ {platform.title()} failed with both models. Primary: {e}, Fallback: {fallback_error}")
-                    return platform, {
-                        "success": False, 
-                        "error": f"Both models failed. Primary: {str(e)}, Fallback: {str(fallback_error)}",
-                        "primary_error": str(e),
-                        "fallback_error": str(fallback_error)
-                    }
+                except Exception as e:
+                    error_msg = f"Model {model} failed: {str(e)}"
+                    errors.append(error_msg)
+                    
+                    if i == 0:
+                        logger.warning(f"⚠️ {platform.title()}: PRIMARY model {model} failed: {e}")
+                    else:
+                        logger.warning(f"⚠️ {platform.title()}: FALLBACK {i} model {model} failed: {e}")
+                    
+                    # Continue to next model if available
+                    if i < len(all_models) - 1:
+                        continue
+            
+            # All models failed for this platform
+            logger.error(f"❌ {platform.title()}: ALL {len(all_models)} models failed")
+            return platform, {
+                "success": False, 
+                "error": f"All {len(all_models)} models failed for {platform}. Errors: {'; '.join(errors)}",
+                "models_attempted": all_models,
+                "errors": errors,
+                "total_attempts": len(all_models)
+            }
         
         # Execute all searches in parallel
         results = {}
