@@ -237,6 +237,7 @@ class PropertyPriceService:
             '99acres': "what is the latest price for %s, %s or similar properties on 99acres, just share the price range and nothing else - no details, only property name and amounts" % (property_name, property_location),
             'housing': "what is the latest price for %s, %s or similar properties on housing.com, just share the price range and nothing else - no details, only property name and amounts" % (property_name, property_location),
             'google': "what is the latest price for %s, %s or similar properties on google, just share the price range and nothing else - no details, only property name and amounts" % (property_name, property_location),
+            'builder_name': "what is the builder name of %s, %s  property, just share the builder name and nothing else - no other details" % (property_name, property_location),
             'apf': "what is the approved project finance status of %s, %s just share the status, and lenders nothing else - no other details" % (property_name, property_location),
             'lenders': "what are the lenders/banks who are providing pre-approved loan on %s, %s property(not factual).Provide full name of the lender/bank." % (property_name, property_location)
         }
@@ -380,17 +381,18 @@ class PropertyPriceService:
                 1. Parse Input: Extract structured property data and return only a valid JSON object as output. No extra text or explanation.
                 2. Property Match: Match the parsed data with the given property name and city (%s, %s).
                     If they do not match, return: false in property_found key.
-
-                3. Lenders Validation: Check the lenders names from the user query and return the name in Capitalize. Keep all the lenders names in the list from the user query.
+                3. Builder Name Validation: Check the builder name for the property based on the property name and location and return the name in Capitalize.
+                    If no valid builder name is found, set "builder_name": "". Try to find the builder name in any possible source.
+                4. Lenders Validation: Check the lenders names from the user query and return the name in Capitalize. Keep all the lenders names in the list from the user query.
                     If no valid lenders are found, set "lenders": [].
-                4. Freshness: Ensure values reflect the most recent available listings for today.
-                5. Price Extraction: Extract the price range (min–max) from each source return only numeric prices range.
+                5. Freshness: Ensure values reflect the most recent available listings for today.
+                6. Price Extraction: Extract the price range (min–max) from each source return only numeric prices range.
                     a. Normalize price format: Thousands → K, Lakhs → L, Crores → Cr.
                     b. Do not include values like "Price on request", "Contact for price","From","Starting" etc or any non-numeric ranges.
                     c. If price is missing or invalid, set "price": "".
-                6. Extract and include the source URL ("link").
-                7. If source has no valid data, set "price": "" and "link": "".
-                8. If multiple properties exist in the user query then return the details of all the properties whose name is similar to user query but unique.
+                7. Extract and include the source URL ("link").
+                8. If source has no valid data, set "price": "" and "link": "".
+                9. If multiple properties exist in the user query then return the details of all the properties whose name is similar to user query but unique.
                         """ % (property_name, property_location)
             openai_structured_response = self.openai_analyzer.get_structured_response(
                 system_message=system_message,
@@ -533,6 +535,7 @@ class PropertyPriceService:
             # GPP -> Saving structured response to the approved_projects table
             try:
                 for property in data_to_save.get("approved_projects"):
+                    print("Property: ",property,"....|||")
                     approved_projects_response = database_service.save_unique_data(data=property, table_name="approved_projects", update_if_exists=True)
                     if approved_projects_response:
                         logger.info(f"✅ Approved Projects Table {approved_projects_response['status']} - {approved_projects_response['message']}")
