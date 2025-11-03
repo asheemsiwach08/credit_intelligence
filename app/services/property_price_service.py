@@ -156,6 +156,11 @@ class PropertyPriceService:
                 "what is the approved project finance status of {property}, {location} "
                 "just share the status, and lenders nothing else - no other details"
             ),
+            'builder_name': (
+                "what is the builder name of {property}, {location} property, "
+                "just share the builder name and nothing else - no other details"
+                "If no valid builder name is found, set builder_name: ' '"
+            ),
             "lenders": (
                 "what are the lenders/banks who are providing pre-approved loan on {property}, {location} "
                 "property(not factual).Provide full name of the lender/bank."
@@ -238,7 +243,7 @@ class PropertyPriceService:
             'housing': "what is the latest price for %s, %s or similar properties on housing.com, just share the price range and nothing else - no details, only property name and amounts" % (property_name, property_location),
             'google': "what is the latest price for %s, %s or similar properties on google, just share the price range and nothing else - no details, only property name and amounts" % (property_name, property_location),
             'builder_name': "what is the builder name of %s, %s  property, just share the builder name and nothing else - no other details" % (property_name, property_location),
-            'apf': "what is the approved project finance status of %s, %s just share the status, and lenders nothing else - no other details" % (property_name, property_location),
+            # 'apf': "what is the approved project finance status of %s, %s just share the status, and lenders nothing else - no other details" % (property_name, property_location),
             'lenders': "what are the lenders/banks who are providing pre-approved loan on %s, %s property(not factual).Provide full name of the lender/bank." % (property_name, property_location)
         }
         
@@ -393,6 +398,7 @@ class PropertyPriceService:
                 7. Extract and include the source URL ("link").
                 8. If source has no valid data, set "price": "" and "link": "".
                 9. If multiple properties exist in the user query then return the details of all the properties whose name is similar to user query but unique.
+                10. If no lenders are found then set 'approval_status': 'Not Approved', else set 'approval_status': 'Approved'.
                         """ % (property_name, property_location)
             openai_structured_response = self.openai_analyzer.get_structured_response(
                 system_message=system_message,
